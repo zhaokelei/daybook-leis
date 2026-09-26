@@ -130,6 +130,20 @@ body {
 .item-title { display: block; font-size: 14px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .item-meta { display: flex; gap: 8px; margin-top: 3px; font-size: 12px; color: var(--color-muted); }
 .item-meta .draft-badge { color: var(--color-accent); }
+.item-del {
+  margin-left: auto;
+  padding: 2px 6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-muted);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out);
+}
+.item-del:hover { color: #c62828; border-color: #c62828; }
 .admin-list .empty { padding: 20px 12px; color: var(--color-muted); font-size: 13px; text-align: center; }
 
 .admin-editor { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
@@ -517,6 +531,16 @@ body {
         draft.textContent = "草稿";
         meta.appendChild(draft);
       }
+      var del = document.createElement("button");
+      del.type = "button";
+      del.className = "item-del";
+      del.textContent = "删除";
+      del.title = "删除这篇文章";
+      del.addEventListener("click", function (event) {
+        event.stopPropagation();
+        deleteNote(n.slug, n.title || n.slug);
+      });
+      meta.appendChild(del);
       li.appendChild(title);
       li.appendChild(meta);
       li.addEventListener("click", function () { loadNote(n.slug); });
@@ -677,6 +701,28 @@ body {
         loadList();
       })
       .catch(function () { setStatus("网络错误，保存失败", "err"); });
+  }
+
+  function deleteNote(slug, title) {
+    if (!slug) return;
+    if (!window.confirm("确定要删除文章「" + title + "」吗？此操作不可恢复。")) return;
+    setStatus("删除中…", "");
+    fetch("/admin/api/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slug: slug })
+    })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+      .then(function (res) {
+        if (!res.ok) {
+          setStatus((res.data && res.data.error) || "删除失败", "err");
+          return;
+        }
+        if (currentSlug === slug) { newNote(); }
+        setStatus("已删除「" + title + "」", "ok");
+        return loadList();
+      })
+      .catch(function () { setStatus("网络错误，删除失败", "err"); });
   }
 
   editor.addEventListener("input", schedulePreview);

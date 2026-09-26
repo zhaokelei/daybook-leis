@@ -54,6 +54,7 @@ func New(options Options) http.Handler {
 	mux.HandleFunc("/admin/api/list", s.requireAuth(s.handleList))
 	mux.HandleFunc("/admin/api/note", s.requireAuth(s.handleNote))
 	mux.HandleFunc("/admin/api/save", s.requireAuth(s.handleSave))
+	mux.HandleFunc("/admin/api/delete", s.requireAuth(s.handleDelete))
 	mux.HandleFunc("/admin/api/preview", s.requireAuth(s.handlePreview))
 	mux.HandleFunc("/admin/api/avatar", s.requireAuth(s.handleAvatar))
 	mux.HandleFunc("/admin/api/account", s.requireAuth(s.handleAccount))
@@ -1088,6 +1089,53 @@ func (s *Server) handleSave(w http.ResponseWriter, r *http.Request) {
 		"ok":   true,
 		"slug": slug,
 		"url":  "/notes/" + slug + "/",
+	})
+}
+
+func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "只支持 POST")
+		return
+	}
+	var req struct {
+		Slug string `json:"slug"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "请求格式错误: "+err.Error())
+		return
+	}
+	slug := sanitizeSlug(req.Slug)
+	if slug == "" {
+		writeError(w, http.StatusBadRequest, "缺少链接标识")
+		return
+	}
+	target, pathErr := s.notePath(slug)
+	if pathErr != nil {
+		writeError(w, http.StatusBadRequest, pathErr.Error())
+		return
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, statErr := os.Stat(target); statErr != nil {
+		writeError(w, http.StatusNotFound, "文章不存在")
+		return
+	}
+	if err := os.Remove(target); err != nil {
+		writeError(w, http.StatusInternalServerError, "删除文章失败: "+err.Error())
+		return
+	}
+	if s.options.Build != nil {
+		if buildErr := s.options.Build(); buildErr != nil {
+			writeError(w, http.StatusInternalServerError, "文章已删除，但重建站点失败: "+buildErr.Error())
+			return
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":   true,
+		"slug": slug,
 	})
 }
 
