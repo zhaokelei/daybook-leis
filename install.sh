@@ -18,7 +18,7 @@
 #
 set -eu
 
-REPO="StatIndet/daybook"
+REPO="zhaokelei/daybook-leis"
 DOWNLOAD_URL_BASE="https://github.com/${REPO}/releases/download"
 API_URL="https://api.github.com/repos/${REPO}/releases/latest"
 

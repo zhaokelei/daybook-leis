@@ -48,53 +48,126 @@ my-vault/
 └── attachments/
 ```
 
-## Installation
+## 一键安装
 
-### Prebuilt Binaries (Recommended)
+本仓库（[zhaokelei/daybook-leis](https://github.com/zhaokelei/daybook-leis)）在 Daybook 基础上内置了**后台写作台**，并提供 Windows / Linux 一键安装脚本：自动识别架构、优先使用本地产物（缺失时再从 GitHub Release 下载）、初始化数据目录，并注册系统服务实现开机自启。
 
-The easiest way to install Daybook is using our release installer. This script will automatically detect your OS and architecture, download the latest prebuilt CLI, verify its checksum, and install it without requiring Go or Node.js.
+### 方式一：在线安装（从 GitHub 直接拉取）
 
-#### Linux / macOS / BSD
+**Linux（amd64 / arm64）**
 
 ```sh
-curl -fsSL https://install.daybook.page | sh
+curl -fsSL https://raw.githubusercontent.com/zhaokelei/daybook-leis/main/install.sh | sudo bash
 ```
 
-By default, the executable is installed to `~/.local/bin/daybook`. You do not need root/sudo privileges. Ensure `~/.local/bin` is in your `$PATH`.
-
-#### Windows
-
-Open PowerShell and run:
+**Windows（在管理员 PowerShell 中运行）**
 
 ```powershell
-irm https://install.daybook.page/windows | iex
+$u = 'https://raw.githubusercontent.com/zhaokelei/daybook-leis/main/install.ps1'
+$f = "$env:TEMP\install-daybook.ps1"
+irm $u -OutFile $f
+powershell -ExecutionPolicy Bypass -File $f
 ```
 
-By default, the executable is installed to `%LOCALAPPDATA%\Programs\Daybook\bin\daybook.exe`. The installer will automatically add this directory to your User PATH. No administrator privileges or WSL are required.
+> 在线安装会从本仓库的 [GitHub Releases](https://github.com/zhaokelei/daybook-leis/releases) 下载对应平台的二进制包。
+> 如果本仓库还没有发布 Release，请改用「方式二」，或先发布一个 Release。
 
-### Platform Support
-
-| Operating System | Architectures | Status |
-|---|---|---|
-| Linux | amd64, arm64 | Native tested |
-| macOS | amd64, arm64 | Build-supported / experimental |
-| Windows | amd64, arm64 | Native tested |
-| FreeBSD | amd64 | Build-supported / experimental |
-| OpenBSD | amd64, arm64 | Build-supported / experimental |
-| NetBSD | amd64 | Build-supported / experimental |
-| DragonFly BSD | amd64 | Build-supported / experimental |
-
-Alternatively, you can manually download the binaries from [GitHub Releases](https://github.com/StatIndet/daybook/releases).
-
-### Build from Source
-Building from source is recommended for development. Ensure you have **Go**, **Node.js** (>=24), and **npm** installed.
+### 方式二：克隆后本地安装（不依赖 Release）
 
 ```bash
-git clone https://github.com/StatIndet/daybook.git
-cd daybook
-./scripts/install-cli.sh
+git clone https://github.com/zhaokelei/daybook-leis.git
+cd daybook-leis
+
+# Linux
+sudo ./install.sh
 ```
-This script installs npm dependencies, builds frontend assets, and installs the `daybook` executable to your Go bin path (`$GOBIN` or `$(go env GOPATH)/bin`).
+
+```powershell
+git clone https://github.com/zhaokelei/daybook-leis.git
+cd daybook-leis
+
+# Windows（管理员 PowerShell）
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+脚本会**优先使用仓库 `dist/` 目录下的本地产物**（例如 `dist/daybook-linux-amd64`、`dist/daybook-windows-amd64.exe`），找不到时再从 GitHub Release 下载。
+
+### 安装后的访问地址
+
+| 项目 | 地址 |
+| ---- | ---- |
+| 站点首页 | `http://<服务器IP>:1313/` |
+| 写作台（后台管理） | `http://<服务器IP>:1313/admin` |
+
+### 默认账号密码
+
+| 项目 | 默认值 |
+| ---- | ------ |
+| 账号 | `admin` |
+| 密码 | `admin` |
+
+> **首次登录后请立即在写作台「账号设置」中修改默认密码。**
+> 凭据以加盐 SHA-256 保存在数据目录的 `.daybook-admin.json` 中。
+
+### Linux 安装选项
+
+| 项目 | 默认值 |
+| ---- | ------ |
+| 可执行文件 | `/usr/local/bin/daybook` |
+| 数据目录 | `/opt/daybook`（`daybook.yaml`、`vault/`、`public/`） |
+| 服务方式 | systemd 服务 `daybook`，开机自启 |
+| 服务端口 | `1313` |
+
+```sh
+sudo ./install.sh                                       # 默认安装并注册 systemd 服务
+sudo ./install.sh --data-dir /opt/daybook --bin-dir /usr/local/bin
+sudo ./install.sh --download                            # 强制从 GitHub 下载
+sudo ./install.sh --no-service                          # 只安装，不注册服务
+sudo ./install.sh --uninstall                           # 卸载（保留数据目录）
+sudo ./install.sh --uninstall --purge                   # 卸载并删除数据目录
+```
+
+服务管理：
+
+```sh
+systemctl status daybook      # 查看状态
+systemctl restart daybook     # 重启服务
+journalctl -u daybook -f      # 查看日志
+```
+
+### Windows 安装选项
+
+| 项目 | 默认值 |
+| ---- | ------ |
+| 可执行文件 | `%ProgramData%\Daybook\bin\daybook.exe` |
+| 数据目录 | `%ProgramData%\Daybook` |
+| 自启方式 | 计划任务 `Daybook`（以 SYSTEM 身份开机启动） |
+| 服务端口 | `1313`（安装时自动放行防火墙） |
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install.ps1                      # 默认安装
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -DataDir "D:\Daybook"
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -Download            # 强制下载
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -NoService
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -Uninstall
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -Uninstall -Purge
+```
+
+> daybook 是普通控制台程序，未实现 Windows 服务控制协议（直接用 `sc.exe` 注册服务会报 1053），因此这里用**任务计划程序**实现等效的开机常驻。
+
+服务管理：
+
+```powershell
+Get-ScheduledTask -TaskName Daybook                     # 查看状态
+Stop-ScheduledTask Daybook; Start-ScheduledTask Daybook # 重启
+```
+
+### 平台支持
+
+| 操作系统 | 架构 | 状态 |
+| ---- | ---- | ---- |
+| Linux | amd64, arm64 | 一键脚本 / 原生支持 |
+| Windows | amd64, arm64 | 一键脚本 / 原生支持 |
 
 ## CLI Commands
 

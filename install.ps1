@@ -29,7 +29,7 @@ param(
 $ErrorActionPreference = "Stop"
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-$Repo = "StatIndet/daybook"
+$Repo = "zhaokelei/daybook-leis"
 $ApiUrl = "https://api.github.com/repos/$Repo/releases/latest"
 $DownloadUrlBase = "https://github.com/$Repo/releases/download"
 $TaskName = "Daybook"
