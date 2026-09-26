@@ -567,7 +567,7 @@ body {
 
   function newNote() {
     currentSlug = "";
-    fillForm({ isNew: true, title: "", slug: today(), date: today(), lang: "zh_CN", i18nKey: "", tags: [], summary: "", body: "", draft: false, pin: false });
+    fillForm({ isNew: true, title: "", slug: "", date: today(), lang: "zh_CN", i18nKey: "", tags: [], summary: "", body: "", draft: false, pin: false });
     renderList();
     preview.innerHTML = "";
     el("f-title").focus();
