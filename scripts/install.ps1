@@ -41,7 +41,7 @@ $InstallDir = if ($env:DAYBOOK_INSTALL_DIR) { $env:DAYBOOK_INSTALL_DIR } else { 
 
 # 2. Get latest release tag
 Write-Log "Fetching latest release info..."
-$Repo = "StatIndet/daybook"
+$Repo = "zhaokelei/daybook-leis"
 $ApiUrl = "https://api.github.com/repos/$Repo/releases/latest"
 
 try {
