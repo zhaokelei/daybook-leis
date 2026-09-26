@@ -1,4 +1,4 @@
-﻿#Requires -Version 5.1
+#Requires -Version 5.1
 <#
 .SYNOPSIS
     Daybook 一键安装脚本（Windows）
@@ -182,32 +182,38 @@ if (-not (Test-Path $ConfigPath)) {
     $yaml = @'
 site:
   name:
-    zh: "我的日记"
-    en_US: "My Daybook"
+    en: "Xiaolei's Daybook"
+    zh: "小磊的日记"
   url: ""
-  startedAt: "2026-09-27"
-  copyright: "© 2026"
+  startedAt: "2026-09-26"
+  copyright: "© 2026 小磊"
+  # Set a path relative to the vault root to use a custom favicon. Empty uses the built-in Daybook favicon.
   favicon: ""
 
 profile:
   author:
-    name: "博主"
-    nameEn: "Owner"
-    logoText: "博主"
-    avatar: ""
+    name: "小磊"
+    nameEn: "Xiaolei"
+    logoText: "小磊"
+    avatar: "/avatar.png"
     aboutUrl: "/about"
   social: []
+  # - type: github
+  #   url: "https://github.com/your-name"
+  # - type: youtube
+  #   url: "https://youtube.com/@your-channel"
+
   slogan:
-    zh: "记录思考与笔记的个人角落。"
     en_US: "Personal nook for thoughts & notes."
+    zh: "记录思考与笔记的个人角落。"
 
 seo:
   homeTitle:
-    zh: "我的 Daybook · 随记与记录"
-    en_US: "My Daybook"
+    en: "Notes from Xiaolei's Daybook"
+    zh: "小磊的 Daybook · 随记与记录"
   homeDescription:
+    en: "Welcome to my personal Daybook."
     zh: "欢迎来到我的个人 Daybook。"
-    en_US: "Welcome to my personal Daybook."
 
 comment:
   enabled: false
@@ -232,24 +238,98 @@ share:
     Write-Log "检测到已有 daybook.yaml，跳过初始化配置"
 }
 
-$HelloPath = Join-Path $DataDir 'vault\notes\hello.md'
-if (-not (Test-Path $HelloPath)) {
-    $hello = @'
+$FirstDiaryZh = Join-Path $DataDir 'vault\notes\第一篇日记.md'
+if (-not (Test-Path $FirstDiaryZh)) {
+    $diaryZh = @'
 ---
-title: 你好，Daybook
-date: "2026-09-27"
+title: 小磊 | 个人简介
+date: "2026-09-26"
 tags:
-  - 随笔
-summary: 第一篇示例笔记
+    - 随笔
+summary: 小磊的个人简介
 lang: zh_CN
+i18n_key: first-diary
 ---
 
-欢迎使用 Daybook！这是你的第一篇笔记。
+# 小磊 / Xiaolei | 个人简介 / Personal Profile
 
-打开写作台 http://localhost:1313/admin 即可开始创作。
+## 👤 基本信息 / Basic Information
+| 中文 | English |
+| :--- | :--- |
+| **姓名**：小磊 | **Name**: Calix |
+| **年龄**：26岁 | **Age**: 26 |
+| **身份**：计算机爱好者、代码爱好者 | **Identity**: Computer Enthusiast & Coding Lover |
+| **状态**：持续学习，深耕所爱，稳步成长 | **Status**: Constantly learning, deeply devoted, steadily growing |
+
+## ✨ 个人标签 / Personal Tags
+| 中文标签 | English Tags |
+| :--- | :--- |
+| `#代码爱好者 #计算机发烧友 #持续深耕 #极简思维 #热爱技术 #终身学习` | `#CodingLover #ComputerEnthusiast #ContinuousExploration #MinimalistThinking #TechPassion #LifelongLearning` |
+
+## 💻 兴趣爱好 / Interests
+| 中文 | English |
+| :--- | :--- |
+| 徜徉于计算机与代码的世界，沉醉于逻辑之美与创造的乐趣。热衷于深挖技术底层原理，反复打磨编码能力，在持续实践与迭代中突破自我边界。<br><br>我始终对互联网、软件开发与计算机底层技术保持赤诚好奇，不止步于表层应用，主动探索新兴技术与框架。每一次编码、调试与优化，皆是沉淀与积累，让热爱成为长期前行的底气与动力。 | I dwell in the world of code and computers, captivated by the beauty of logic and the joy of creation. I enjoy exploring underlying technical principles, refining programming skills, and breaking through limitations through continuous practice and iteration.<br><br>I always retain a sincere curiosity for the internet, software development, and computer fundamentals. Rather than staying at superficial application usage, I actively explore emerging technologies and frameworks. Every coding practice, debugging process, and optimization effort becomes solid accumulation, turning passion into long-term motivation for steady progress. |
+
+## 📝 个人感悟 / Personal Insights
+| 中文 | English |
+| :--- | :--- |
+| 技术从无捷径，所有成长，皆源于日积月累的沉淀与日复一日的坚守。<br><br>二十六岁，守纯粹热爱，持清醒自知，不浮躁、不苟且。热爱代码，不止热爱敲码的过程，更倾心于技术重塑事物、创造价值、赋能美好的力量。<br><br>未来，我将继续深耕技术领域，持续学习、不断迭代，以匠心沉淀自我，以热爱奔赴长远成长。 | Technology bears no shortcuts. All advancement comes from persistent accumulation and quiet perseverance.<br><br>At 26, I uphold pure enthusiasm and sober self-awareness, free from impetuosity and superficiality. My love for code is never limited to the act of programming itself, but lies in the power of technology to reshape reality, deliver value, and bring possibilities to life.<br><br>I will continue to immerse myself in the technical field, keep learning, keep iterating, and grow steadily with devotion and patience. |
+
+## 🎯 个人愿景 / Personal Vision
+| 中文 | English |
+| :--- | :--- |
+| 专注技术，踏实精进，从容前行。<br><br>持续打磨自身技术能力，在热爱的赛道上不断探索，解锁更多技术可能，成长为有思考、有沉淀的专业技术爱好者。愿热爱落地生根，让每一步成长皆清晰可见。 | To stay focused on technology, progress calmly and diligently.<br><br>I will keep polishing my technical capabilities, explore more technological possibilities on this beloved track, and grow into a thoughtful, professional tech enthusiast. Let passion take root, and let every step of growth be clearly visible. |
 '@
-    [IO.File]::WriteAllText($HelloPath, $hello, $Utf8NoBom)
-    Write-Log "已生成示例笔记 vault\notes\hello.md"
+    [IO.File]::WriteAllText($FirstDiaryZh, $diaryZh, $Utf8NoBom)
+    Write-Log "已生成第一篇笔记 vault\notes\第一篇日记.md"
+}
+
+$FirstDiaryEn = Join-Path $DataDir 'vault\notes\first-diary.md'
+if (-not (Test-Path $FirstDiaryEn)) {
+    $diaryEn = @'
+---
+title: Xiaolei | Personal Profile
+date: "2026-09-26"
+tags:
+    - Essay
+summary: Personal profile of Xiaolei
+lang: en_US
+i18n_key: first-diary
+---
+
+# 小磊 / Xiaolei | 个人简介 / Personal Profile
+
+## 👤 基本信息 / Basic Information
+| 中文 | English |
+| :--- | :--- |
+| **姓名**：小磊 | **Name**: Calix |
+| **年龄**：26岁 | **Age**: 26 |
+| **身份**：计算机爱好者、代码爱好者 | **Identity**: Computer Enthusiast & Coding Lover |
+| **状态**：持续学习，深耕所爱，稳步成长 | **Status**: Constantly learning, deeply devoted, steadily growing |
+
+## ✨ 个人标签 / Personal Tags
+| 中文标签 | English Tags |
+| :--- | :--- |
+| `#代码爱好者 #计算机发烧友 #持续深耕 #极简思维 #热爱技术 #终身学习` | `#CodingLover #ComputerEnthusiast #ContinuousExploration #MinimalistThinking #TechPassion #LifelongLearning` |
+
+## 💻 兴趣爱好 / Interests
+| 中文 | English |
+| :--- | :--- |
+| 徜徉于计算机与代码的世界，沉醉于逻辑之美与创造的乐趣。热衷于深挖技术底层原理，反复打磨编码能力，在持续实践与迭代中突破自我边界。<br><br>我始终对互联网、软件开发与计算机底层技术保持赤诚好奇，不止步于表层应用，主动探索新兴技术与框架。每一次编码、调试与优化，皆是沉淀与积累，让热爱成为长期前行的底气与动力。 | I dwell in the world of code and computers, captivated by the beauty of logic and the joy of creation. I enjoy exploring underlying technical principles, refining programming skills, and breaking through limitations through continuous practice and iteration.<br><br>I always retain a sincere curiosity for the internet, software development, and computer fundamentals. Rather than staying at superficial application usage, I actively explore emerging technologies and frameworks. Every coding practice, debugging process, and optimization effort becomes solid accumulation, turning passion into long-term motivation for steady progress. |
+
+## 📝 个人感悟 / Personal Insights
+| 中文 | English |
+| :--- | :--- |
+| 技术从无捷径，所有成长，皆源于日积月累的沉淀与日复一日的坚守。<br><br>二十六岁，守纯粹热爱，持清醒自知，不浮躁、不苟且。热爱代码，不止热爱敲码的过程，更倾心于技术重塑事物、创造价值、赋能美好的力量。<br><br>未来，我将继续深耕技术领域，持续学习、不断迭代，以匠心沉淀自我，以热爱奔赴长远成长。 | Technology bears no shortcuts. All advancement comes from persistent accumulation and quiet perseverance.<br><br>At 26, I uphold pure enthusiasm and sober self-awareness, free from impetuosity and superficiality. My love for code is never limited to the act of programming itself, but lies in the power of technology to reshape reality, deliver value, and bring possibilities to life.<br><br>I will continue to immerse myself in the technical field, keep learning, keep iterating, and grow steadily with devotion and patience. |
+
+## 🎯 个人愿景 / Personal Vision
+| 中文 | English |
+| :--- | :--- |
+| 专注技术，踏实精进，从容前行。<br><br>持续打磨自身技术能力，在热爱的赛道上不断探索，解锁更多技术可能，成长为有思考、有沉淀的专业技术爱好者。愿热爱落地生根，让每一步成长皆清晰可见。 | To stay focused on technology, progress calmly and diligently.<br><br>I will keep polishing my technical capabilities, explore more technological possibilities on this beloved track, and grow into a thoughtful, professional tech enthusiast. Let passion take root, and let every step of growth be clearly visible. |
+'@
+    [IO.File]::WriteAllText($FirstDiaryEn, $diaryEn, $Utf8NoBom)
+    Write-Log "已生成第一篇笔记（英文）vault\notes\first-diary.md"
 }
 
 $AboutPath = Join-Path $DataDir 'vault\pages\about.md'
