@@ -10,6 +10,7 @@ import (
 	"github.com/StatIndet/daybook/internal/config"
 	"github.com/StatIndet/daybook/internal/progress"
 	"github.com/StatIndet/daybook/internal/site"
+	"github.com/StatIndet/daybook/internal/stats"
 )
 
 var Version = "daybook dev"
@@ -113,16 +114,20 @@ func run() error {
 	}
 
 	if command == "serve" {
-		
-		
+		statsHandler := stats.New(cwd)
+
 		adminHandler := admin.New(admin.Options{
 			NotesDir:   notesDir,
 			PublicDir:  publicDir,
 			ContentDir: contentDir,
 			ConfigPath: filepath.Join(cwd, "daybook.yaml"),
 			Build: func() error {
+				freshCfg, loadErr := config.Load()
+				if loadErr != nil {
+					return loadErr
+				}
 				_, buildErr := site.Build(site.Options{
-					Config:     cfg,
+					Config:     freshCfg,
 					ContentDir: contentDir,
 					NotesDir:   notesDir,
 					PublicDir:  publicDir,
@@ -133,6 +138,8 @@ func run() error {
 		mux := http.NewServeMux()
 		mux.Handle("/admin", adminHandler)
 		mux.Handle("/admin/", adminHandler)
+		mux.HandleFunc("/api/hit", statsHandler.HandleHit)
+		mux.HandleFunc("/api/presence", statsHandler.HandlePresence)
 		mux.Handle("/", http.FileServer(http.Dir(publicDir)))
 		fmt.Println("预览地址: http://localhost:1313")
 		fmt.Println("写作台:   http://localhost:1313/admin")

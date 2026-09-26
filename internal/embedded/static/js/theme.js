@@ -3,7 +3,7 @@
   // assets/ts/theme.ts
   (function() {
     const root = document.documentElement;
-    const isEn = window.location.pathname.startsWith("/en_US");
+    const isEn = window.location.pathname.startsWith("/en");
     const translations = {
       "zh_CN": {
         "theme.light": "\u6D45\u8272",

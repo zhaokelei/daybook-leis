@@ -57,6 +57,7 @@ func New(options Options) http.Handler {
 	mux.HandleFunc("/admin/api/preview", s.requireAuth(s.handlePreview))
 	mux.HandleFunc("/admin/api/avatar", s.requireAuth(s.handleAvatar))
 	mux.HandleFunc("/admin/api/account", s.requireAuth(s.handleAccount))
+	mux.HandleFunc("/admin/api/site", s.requireAuth(s.handleSite))
 	return mux
 }
 
@@ -257,44 +258,171 @@ func (s *Server) handleAccount(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "username": creds.Username})
 }
 
-func readConfigScalar(configPath, key string) string {
+// findConfigKey 在配置行中按嵌套路径（如 profile / author / avatar）定位键，
+// 返回所在行号与行首缩进；找不到时返回 (-1, "")。
+func findConfigKey(lines []string, path []string) (int, string) {
+	parentIndent := -1
+	start := 0
+	for depth, key := range path {
+		found := -1
+		childIndent := -1
+		for i := start; i < len(lines); i++ {
+			line := lines[i]
+			trimmed := strings.TrimSpace(line)
+			if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+				continue
+			}
+			lineIndent := len(line) - len(strings.TrimLeft(line, " \t"))
+			if lineIndent <= parentIndent {
+				break
+			}
+			if childIndent < 0 {
+				childIndent = lineIndent
+			}
+			if lineIndent == childIndent && strings.HasPrefix(trimmed, key+":") {
+				found = i
+				break
+			}
+		}
+		if found < 0 {
+			return -1, ""
+		}
+		if depth == len(path)-1 {
+			indent := lines[found][:len(lines[found])-len(strings.TrimLeft(lines[found], " \t"))]
+			return found, indent
+		}
+		parentIndent = childIndent
+		start = found + 1
+	}
+	return -1, ""
+}
+
+// readConfigValue 读取嵌套配置项的值（如 profile.author.avatar）。
+func readConfigValue(configPath string, path ...string) string {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return ""
 	}
-	for _, line := range strings.Split(string(data), "\n") {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "#") || !strings.HasPrefix(trimmed, key+":") {
-			continue
-		}
-		value := strings.TrimSpace(strings.TrimPrefix(trimmed, key+":"))
-		return strings.Trim(value, "\"'")
+	lines := strings.Split(string(data), "\n")
+	idx, _ := findConfigKey(lines, path)
+	if idx < 0 {
+		return ""
 	}
-	return ""
+	leaf := path[len(path)-1]
+	trimmed := strings.TrimSpace(lines[idx])
+	value := strings.TrimSpace(strings.TrimPrefix(trimmed, leaf+":"))
+	return strings.Trim(value, "\"'")
 }
 
-func updateConfigScalar(configPath, key, value string) error {
+// updateConfigValue 更新嵌套配置项的值；若叶子键不存在，则在其父级块末尾插入。
+func updateConfigValue(configPath, value string, path ...string) error {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return err
 	}
 	lines := strings.Split(string(data), "\n")
-	for i, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "#") || !strings.HasPrefix(trimmed, key+":") {
-			continue
-		}
-		indent := line[:len(line)-len(strings.TrimLeft(line, " \t"))]
-		lines[i] = indent + key + ": " + strconv.Quote(value)
+	leaf := path[len(path)-1]
+
+	idx, indent := findConfigKey(lines, path)
+	if idx >= 0 {
+		lines[idx] = indent + leaf + ": " + strconv.Quote(value)
 		return os.WriteFile(configPath, []byte(strings.Join(lines, "\n")), 0644)
 	}
-	return fmt.Errorf("未找到配置项 %s", key)
+
+	if len(path) < 2 {
+		return fmt.Errorf("未找到配置项 %s", strings.Join(path, "."))
+	}
+	parentIdx, parentIndent := findConfigKey(lines, path[:len(path)-1])
+	if parentIdx < 0 {
+		return fmt.Errorf("未找到配置项 %s", strings.Join(path, "."))
+	}
+	insertAt := parentIdx + 1
+	blockIndent := parentIndent + "  "
+	for i := parentIdx + 1; i < len(lines); i++ {
+		line := lines[i]
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		lineIndent := len(line) - len(strings.TrimLeft(line, " \t"))
+		if lineIndent <= len(parentIndent) {
+			break
+		}
+		blockIndent = line[:lineIndent]
+		insertAt = i + 1
+	}
+	newLine := blockIndent + leaf + ": " + strconv.Quote(value)
+	updated := make([]string, 0, len(lines)+1)
+	updated = append(updated, lines[:insertAt]...)
+	updated = append(updated, newLine)
+	updated = append(updated, lines[insertAt:]...)
+	return os.WriteFile(configPath, []byte(strings.Join(updated, "\n")), 0644)
+}
+
+func (s *Server) handleSite(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		writeJSON(w, http.StatusOK, map[string]any{
+			"ok":       true,
+			"name":     readConfigValue(s.options.ConfigPath, "profile", "author", "name"),
+			"nameEn":   readConfigValue(s.options.ConfigPath, "profile", "author", "nameEn"),
+			"sloganZh": readConfigValue(s.options.ConfigPath, "profile", "slogan", "zh"),
+			"sloganEn": readConfigValue(s.options.ConfigPath, "profile", "slogan", "en_US"),
+		})
+	case http.MethodPost:
+		s.saveSite(w, r)
+	default:
+		writeError(w, http.StatusMethodNotAllowed, "只支持 GET 或 POST")
+	}
+}
+
+func (s *Server) saveSite(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Name     string `json:"name"`
+		NameEn   string `json:"nameEn"`
+		SloganZh string `json:"sloganZh"`
+		SloganEn string `json:"sloganEn"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "请求格式错误: "+err.Error())
+		return
+	}
+	if s.options.ConfigPath == "" {
+		writeError(w, http.StatusInternalServerError, "服务未配置 daybook.yaml")
+		return
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	updates := []struct {
+		value string
+		path  []string
+	}{
+		{strings.TrimSpace(req.Name), []string{"profile", "author", "name"}},
+		{strings.TrimSpace(req.NameEn), []string{"profile", "author", "nameEn"}},
+		{strings.TrimSpace(req.SloganZh), []string{"profile", "slogan", "zh"}},
+		{strings.TrimSpace(req.SloganEn), []string{"profile", "slogan", "en_US"}},
+	}
+	for _, u := range updates {
+		if err := updateConfigValue(s.options.ConfigPath, u.value, u.path...); err != nil {
+			writeError(w, http.StatusInternalServerError, "更新 daybook.yaml 失败: "+err.Error())
+			return
+		}
+	}
+	if s.options.Build != nil {
+		if buildErr := s.options.Build(); buildErr != nil {
+			writeError(w, http.StatusInternalServerError, "已保存，但重建站点失败: "+buildErr.Error())
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 func (s *Server) handleAvatar(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "avatar": readConfigScalar(s.options.ConfigPath, "avatar")})
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "avatar": readConfigValue(s.options.ConfigPath, "profile", "author", "avatar")})
 	case http.MethodPost:
 		s.uploadAvatar(w, r)
 	default:
@@ -307,7 +435,12 @@ func (s *Server) removeOtherAvatars(keep string) {
 		if dir == "" {
 			continue
 		}
-		matches, _ := filepath.Glob(filepath.Join(dir, "avatar.*"))
+		var matches []string
+		for _, pattern := range []string{"avatar.*", "avatar-*"} {
+			if m, err := filepath.Glob(filepath.Join(dir, pattern)); err == nil {
+				matches = append(matches, m...)
+			}
+		}
 		for _, match := range matches {
 			if filepath.Base(match) == keep {
 				continue
@@ -354,7 +487,7 @@ func (s *Server) uploadAvatar(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	name := "avatar" + ext
+	name := "avatar-" + strconv.FormatInt(time.Now().UnixNano(), 10) + ext
 	target := filepath.Join(s.options.ContentDir, name)
 	if err := os.MkdirAll(s.options.ContentDir, 0755); err != nil {
 		writeError(w, http.StatusInternalServerError, "创建目录失败: "+err.Error())
@@ -367,7 +500,7 @@ func (s *Server) uploadAvatar(w http.ResponseWriter, r *http.Request) {
 	s.removeOtherAvatars(name)
 
 	webPath := "/" + name
-	if err := updateConfigScalar(s.options.ConfigPath, "avatar", webPath); err != nil {
+	if err := updateConfigValue(s.options.ConfigPath, webPath, "profile", "author", "avatar"); err != nil {
 		writeError(w, http.StatusInternalServerError, "更新 daybook.yaml 失败: "+err.Error())
 		return
 	}
@@ -387,6 +520,7 @@ type frontmatter struct {
 	Tags    []string `yaml:"tags,omitempty"`
 	Summary string   `yaml:"summary,omitempty"`
 	Lang    string   `yaml:"lang,omitempty"`
+	I18nKey string   `yaml:"i18n_key,omitempty"`
 	Draft   bool     `yaml:"draft,omitempty"`
 	Math    bool     `yaml:"math,omitempty"`
 }
@@ -498,12 +632,13 @@ func (s *Server) handlePage(w http.ResponseWriter, r *http.Request) {
 }
 
 type listItem struct {
-	Slug  string   `json:"slug"`
-	Title string   `json:"title"`
-	Date  string   `json:"date"`
-	Tags  []string `json:"tags"`
-	Lang  string   `json:"lang"`
-	Draft bool     `json:"draft"`
+	Slug    string   `json:"slug"`
+	Title   string   `json:"title"`
+	Date    string   `json:"date"`
+	Tags    []string `json:"tags"`
+	Lang    string   `json:"lang"`
+	I18nKey string   `json:"i18nKey"`
+	Draft   bool     `json:"draft"`
 }
 
 func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {
@@ -537,6 +672,7 @@ func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {
 					if lang := strings.TrimSpace(fm.Lang); lang != "" {
 						item.Lang = lang
 					}
+					item.I18nKey = strings.TrimSpace(fm.I18nKey)
 					item.Draft = fm.Draft
 				}
 			}
@@ -564,6 +700,7 @@ type notePayload struct {
 	Tags    []string `json:"tags"`
 	Summary string   `json:"summary"`
 	Lang    string   `json:"lang"`
+	I18nKey string   `json:"i18nKey"`
 	Draft   bool     `json:"draft"`
 	Body    string   `json:"body"`
 	IsNew   bool     `json:"isNew"`
@@ -598,6 +735,7 @@ func (s *Server) handleNote(w http.ResponseWriter, r *http.Request) {
 			payload.Tags = fm.Tags
 			payload.Summary = strings.TrimSpace(fm.Summary)
 			payload.Lang = strings.TrimSpace(fm.Lang)
+			payload.I18nKey = strings.TrimSpace(fm.I18nKey)
 			payload.Draft = fm.Draft
 			payload.Body = body
 		}
@@ -618,6 +756,7 @@ type saveRequest struct {
 	Tags         []string `json:"tags"`
 	Summary      string   `json:"summary"`
 	Lang         string   `json:"lang"`
+	I18nKey      string   `json:"i18nKey"`
 	Draft        bool     `json:"draft"`
 	Body         string   `json:"body"`
 }
@@ -682,6 +821,7 @@ func (s *Server) handleSave(w http.ResponseWriter, r *http.Request) {
 		Tags:    tags,
 		Summary: strings.TrimSpace(req.Summary),
 		Lang:    lang,
+		I18nKey: strings.TrimSpace(req.I18nKey),
 		Draft:   req.Draft,
 	}
 	yamlBytes, marshalErr := yaml.Marshal(fm)

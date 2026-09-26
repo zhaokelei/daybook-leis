@@ -336,6 +336,9 @@ body {
         <input class="admin-field grow" id="f-tags" type="text" placeholder="标签，用英文逗号分隔">
         <input class="admin-field grow" id="f-summary" type="text" placeholder="摘要（可选）">
       </div>
+      <div class="admin-meta-row">
+        <input class="admin-field grow" id="f-i18n-key" type="text" placeholder="多语言分组键 i18n_key（中英文版本填相同值即可合并为一篇文章）">
+      </div>
     </div>
     <div class="admin-toolbar" id="toolbar">
       <button type="button" class="admin-tool" data-action="h2" title="标题">H2</button>
@@ -377,6 +380,15 @@ body {
       <button type="button" class="admin-modal-close" id="account-close" title="关闭">×</button>
     </div>
     <div class="admin-modal-body">
+      <section class="account-block">
+        <div class="account-block-title">站点信息</div>
+        <label class="account-field"><span>标题（中文）</span><input class="admin-field" id="site-name-zh" type="text" placeholder="博主昵称"></label>
+        <label class="account-field"><span>标题（English）</span><input class="admin-field" id="site-name-en" type="text" placeholder="Owner name"></label>
+        <label class="account-field"><span>副标题（中文）</span><input class="admin-field" id="site-slogan-zh" type="text" placeholder="一句话简介"></label>
+        <label class="account-field"><span>副标题（English）</span><input class="admin-field" id="site-slogan-en" type="text" placeholder="One-line intro"></label>
+        <div class="account-hint" id="site-hint"></div>
+        <div class="account-actions"><button type="button" class="admin-btn primary" id="btn-save-site">保存站点信息</button></div>
+      </section>
       <section class="account-block">
         <div class="account-block-title">头像</div>
         <div class="avatar-row">
@@ -484,6 +496,7 @@ body {
     el("f-slug").value = note.slug || "";
     el("f-date").value = note.date || today();
     el("f-lang").value = note.lang || "zh_CN";
+    el("f-i18n-key").value = note.i18nKey || "";
     el("f-draft").checked = !!note.draft;
     el("f-tags").value = (note.tags || []).join(", ");
     el("f-summary").value = note.summary || "";
@@ -506,7 +519,7 @@ body {
 
   function newNote() {
     currentSlug = "";
-    fillForm({ isNew: true, title: "", slug: today(), date: today(), lang: "zh_CN", tags: [], summary: "", body: "" });
+    fillForm({ isNew: true, title: "", slug: today(), date: today(), lang: "zh_CN", i18nKey: "", tags: [], summary: "", body: "" });
     renderList();
     preview.innerHTML = "";
     el("f-title").focus();
@@ -588,6 +601,7 @@ body {
       tags: tags,
       summary: el("f-summary").value.trim(),
       lang: el("f-lang").value,
+      i18nKey: el("f-i18n-key").value.trim(),
       draft: el("f-draft").checked,
       body: editor.value
     };
@@ -663,6 +677,18 @@ body {
         }
       })
       .catch(function () {});
+    el("site-hint").className = "account-hint";
+    el("site-hint").textContent = "";
+    fetch("/admin/api/site")
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data) return;
+        el("site-name-zh").value = data.name || "";
+        el("site-name-en").value = data.nameEn || "";
+        el("site-slogan-zh").value = data.sloganZh || "";
+        el("site-slogan-en").value = data.sloganEn || "";
+      })
+      .catch(function () {});
   }
 
   function closeAccount() { accountModal.hidden = true; }
@@ -699,6 +725,29 @@ body {
         el("avatar-preview").style.backgroundImage = "url('" + res.data.avatar + "?t=" + Date.now() + "')";
       })
       .catch(function () { hint.className = "account-hint err"; hint.textContent = "网络错误，上传失败"; });
+  });
+
+  el("btn-save-site").addEventListener("click", function () {
+    var hint = el("site-hint");
+    hint.className = "account-hint";
+    hint.textContent = "保存中…";
+    fetch("/admin/api/site", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: el("site-name-zh").value.trim(),
+        nameEn: el("site-name-en").value.trim(),
+        sloganZh: el("site-slogan-zh").value.trim(),
+        sloganEn: el("site-slogan-en").value.trim()
+      })
+    })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+      .then(function (res) {
+        if (!res.ok) { hint.className = "account-hint err"; hint.textContent = (res.data && res.data.error) || "保存失败"; return; }
+        hint.className = "account-hint ok";
+        hint.textContent = "站点信息已更新";
+      })
+      .catch(function () { hint.className = "account-hint err"; hint.textContent = "网络错误，保存失败"; });
   });
 
   el("btn-save-account").addEventListener("click", function () {
