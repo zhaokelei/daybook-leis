@@ -2,7 +2,7 @@
 set -eu
 
 # GitHub repository
-REPO="StatIndet/daybook"
+REPO="zhaokelei/daybook-leis"
 DOWNLOAD_URL_BASE="https://github.com/${REPO}/releases"
 
 # Default install directory
