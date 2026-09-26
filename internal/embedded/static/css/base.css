@@ -1,0 +1,59 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+::selection {
+  background: var(--color-accent);
+  color: var(--color-page);
+}
+
+body {
+  margin: 0;
+  color: var(--color-text);
+  background: var(--color-page);
+  display: flex;
+  flex-direction: column;
+  font-family: var(--font-ui);
+  line-height: 1.7;
+  min-height: 100vh;
+}
+
+.page-frame {
+  display: contents;
+}
+
+html {
+  background: var(--color-page);
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--color-text) 25%, transparent) transparent;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  html {
+    scrollbar-gutter: stable;
+  }
+}
+
+a {
+  color: var(--color-text);
+}
+
+.material-symbol {
+  direction: ltr;
+  display: inline-block;
+  font-family: var(--font-icon);
+  font-feature-settings: "liga";
+  font-size: 1.15rem;
+  font-style: normal;
+  font-weight: normal;
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+  letter-spacing: 0;
+  line-height: 1;
+  text-transform: none;
+  transition: font-variation-settings 180ms ease;
+  white-space: nowrap;
+  word-wrap: normal;
+}

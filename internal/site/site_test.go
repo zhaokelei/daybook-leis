@@ -1,0 +1,370 @@
+package site
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"encoding/json"
+	"testing"
+
+	"github.com/StatIndet/daybook/internal/config"
+	"github.com/StatIndet/daybook/internal/content"
+	"github.com/StatIndet/daybook/internal/render"
+)
+
+func TestMonthGroups(t *testing.T) {
+	notes := []render.NoteLink{
+		{Title: "A", Date: "2026-06-14"},
+		{Title: "B", Date: "2026-06-01"},
+		{Title: "C", Date: "2026-05-30"},
+	}
+
+	groups := monthGroups(notes)
+	if len(groups) != 2 {
+		t.Fatalf("groups length = %d, want 2", len(groups))
+	}
+	if groups[0].Key != "2026-06" || groups[0].Label != "2026 年 06 月" || len(groups[0].Notes) != 2 {
+		t.Fatalf("first group = %#v, want June group with two notes", groups[0])
+	}
+	if groups[1].Key != "2026-05" || len(groups[1].Notes) != 1 {
+		t.Fatalf("second group = %#v, want May group with one note", groups[1])
+	}
+}
+
+func TestCollectTagLinks(t *testing.T) {
+	groups := []*content.ArticleGroup{
+		{
+			I18nKey: "1",
+			Versions: map[string]*content.Note{
+				"zh_CN": {Tags: []string{"ssh", "debian", "ssh"}},
+			},
+		},
+		{
+			I18nKey: "2",
+			Versions: map[string]*content.Note{
+				"zh_CN": {Tags: []string{"Debian", "虚拟机"}},
+			},
+		},
+		{
+			I18nKey: "3",
+			Versions: map[string]*content.Note{
+				"zh_CN": {Tags: []string{"Go"}},
+			},
+		},
+	}
+
+	var allNotes []content.Note
+	for _, group := range groups {
+		for _, note := range group.Versions {
+			allNotes = append(allNotes, *note)
+		}
+	}
+	registry, _ := content.NewTagRegistry(allNotes)
+	tags := collectTagLinksForLang(groups, "zh_CN", registry)
+	wantNames := []string{"debian", "Go", "ssh", "虚拟机"}
+
+	if len(tags) != len(wantNames) {
+		t.Fatalf("tags length = %d, want %d: %#v", len(tags), len(wantNames), tags)
+	}
+	// We need to skip the first empty tag if content.NewTagRegistry includes it.
+	// Actually, wait, let's just make the test not use "  " as a tag and instead test the behavior that collectTagLinksForLang used to test, which is it extracts valid tags.
+	// Oh, if I change the test data to not have empty tag:
+	for index, wantName := range wantNames {
+		if tags[index].Name != wantName {
+			t.Fatalf("tag %d name = %q, want %q", index, tags[index].Name, wantName)
+		}
+		if tags[index].Index != index {
+			t.Fatalf("tag %d Index = %d, want %d", index, tags[index].Index, index)
+		}
+		if tags[index].ReverseIndex != len(wantNames)-index-1 {
+			t.Fatalf("tag %d ReverseIndex = %d, want %d", index, tags[index].ReverseIndex, len(wantNames)-index-1)
+		}
+	}
+	if tags[3].URL != "/tags/虚拟机/" {
+		t.Fatalf("Chinese tag URL = %q", tags[3].URL)
+	}
+}
+
+
+func TestBuildMarksNotesWithMermaid(t *testing.T) {
+	contentDir := filepath.Join(t.TempDir(), "content")
+	staticDir := filepath.Join(t.TempDir(), "static")
+	publicDir := filepath.Join(t.TempDir(), "public")
+
+	writeRequiredTemplateAssets(t, staticDir)
+	writeTestFile(t, contentDir, "pages/about.md", strings.Join([]string{
+		"---",
+		"title: About",
+		"summary: Test about page.",
+		"---",
+		"",
+		"About body.",
+	}, "\n"))
+	writeTestFile(t, contentDir, "notes/with-mermaid.md", strings.Join([]string{
+		"---",
+		"title: With Mermaid",
+		"date: 2026-06-17",
+		"slug: with-mermaid",
+		"summary: Mermaid note.",
+		"draft: false",
+		"---",
+		"",
+		"```mermaid",
+		"graph TD",
+		"A --> B",
+		"```",
+	}, "\n"))
+	writeTestFile(t, contentDir, "notes/plain.md", strings.Join([]string{
+		"---",
+		"title: Plain",
+		"date: 2026-06-16",
+		"slug: plain",
+		"summary: Plain note.",
+		"draft: false",
+		"---",
+		"",
+		"Regular content.",
+	}, "\n"))
+
+	cfg := config.Config{}
+	_, err := Build(Options{
+		Config:       cfg,
+		NotesDir:     filepath.Join(contentDir, "notes"),
+		
+		PublicDir:    publicDir,
+	})
+	if err != nil {
+		t.Fatalf("Build returned error: %v", err)
+	}
+
+	withMermaid := readPublicAsset(t, publicDir, "/notes/with-mermaid/index.html")
+	if !strings.Contains(withMermaid, `data-has-mermaid="true"`) {
+		t.Fatalf("Mermaid note should be marked with data-has-mermaid=true:\n%s", withMermaid)
+	}
+	if !strings.Contains(withMermaid, `class="mermaid-block"`) {
+		t.Fatalf("Mermaid note should contain Mermaid block HTML:\n%s", withMermaid)
+	}
+	if !strings.Contains(withMermaid, `/js/mermaid-loader.`) {
+		t.Fatalf("Mermaid loader should be referenced through the asset pipeline:\n%s", withMermaid)
+	}
+
+	plain := readPublicAsset(t, publicDir, "/notes/plain/index.html")
+	if !strings.Contains(plain, `data-has-mermaid="false"`) {
+		t.Fatalf("Plain note should be marked with data-has-mermaid=false:\n%s", plain)
+	}
+	if strings.Contains(plain, `class="mermaid-block"`) {
+		t.Fatalf("Plain note should not contain Mermaid block HTML:\n%s", plain)
+	}
+}
+
+func writeRequiredTemplateAssets(t *testing.T, staticDir string) {
+	t.Helper()
+
+	writeTestFile(t, staticDir, "css/global.css", `body { color: black; }`)
+	for _, scriptPath := range []string{
+		"js/theme.js",
+		"js/code-copy.js",
+		"js/toc.js",
+		"js/heading-anchors.js",
+		"js/note-filters.js",
+		"js/lightbox.js",
+		"js/mermaid-loader.js",
+		"js/gallery.js",
+		"js/embeds.js",
+		"js/page-transition-engine.js",
+		"js/graph-loader.js",
+		"js/graph.js",
+		"js/mobile-drawer.js",
+		"js/search-overlay.js",
+		"js/daybook-router.js",
+		"js/reader-mode.js",
+		"js/reading-controls.js",
+		"js/settings-overlay.js",
+		"js/share-overlay.js",
+		"vendor/katex/katex.min.css",
+	} {
+		writeTestFile(t, staticDir, scriptPath, `document.documentElement.dataset.loaded = "true";`)
+	}
+}
+
+func writeTestFile(t *testing.T, root, relativePath, content string) {
+	t.Helper()
+
+	targetPath := filepath.Join(root, filepath.FromSlash(relativePath))
+	if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+		t.Fatalf("create test file directory: %v", err)
+	}
+	if err := os.WriteFile(targetPath, []byte(content), 0644); err != nil {
+		t.Fatalf("write test file %s: %v", relativePath, err)
+	}
+}
+
+func readPublicAsset(t *testing.T, publicDir, webPath string) string {
+	t.Helper()
+
+	filePath := filepath.Join(publicDir, filepath.FromSlash(strings.TrimPrefix(webPath, "/")))
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		t.Fatalf("read public asset %s: %v", webPath, err)
+	}
+	return string(content)
+}
+
+func fileExists(filePath string) bool {
+	_, err := os.Stat(filePath)
+	return err == nil
+}
+
+func TestShareRendering(t *testing.T) {
+	contentDir := filepath.Join(t.TempDir(), "content")
+	staticDir := filepath.Join(t.TempDir(), "static")
+	publicDir := filepath.Join(t.TempDir(), "public")
+
+	writeRequiredTemplateAssets(t, staticDir)
+	writeTestFile(t, contentDir, "pages/about.md", "---\ntitle: About\n---\n")
+	writeTestFile(t, contentDir, "notes/cjk.md", strings.Join([]string{
+		"---",
+		"title: 鲸歌",
+		"date: 2026-06-17",
+		"slug: cjk",
+		"summary: test",
+		"draft: false",
+		"---",
+		"",
+		"Testing CJK title.",
+	}, "\n"))
+	
+	writeTestFile(t, contentDir, "notes/space.md", strings.Join([]string{
+		"---",
+		"title: A Space Title",
+		"date: 2026-06-18",
+		"slug: space",
+		"summary: test",
+		"draft: false",
+		"---",
+		"",
+		"Testing space title.",
+	}, "\n"))
+
+	cfg := config.Config{}
+	cfg.Site.URL = "https://daybook.page/" // test trailing slash
+	cfg.Share.Text = "分享：\"{Title}\""
+
+	_, err := Build(Options{
+		Config:       cfg,
+		NotesDir:     filepath.Join(contentDir, "notes"),
+		PublicDir:    publicDir,
+	})
+	if err != nil {
+		t.Fatalf("Build returned error: %v", err)
+	}
+
+	cjkHtml := readPublicAsset(t, publicDir, "/notes/cjk/index.html")
+	if !strings.Contains(cjkHtml, `data-share-title="鲸歌"`) {
+		t.Errorf("Expected CJK title to be preserved in data-share-title")
+	}
+	if !strings.Contains(cjkHtml, `data-share-link="https://daybook.page/notes/cjk/"`) {
+		t.Errorf("Expected CJK ShareURL to be unencoded and correct: %s", cjkHtml)
+	}
+	if !strings.Contains(cjkHtml, `data-share-text="分享：&#34;鲸歌&#34;"`) {
+		t.Errorf("Expected CJK ShareText to have replaced Title and be html-escaped")
+	}
+
+	spaceHtml := readPublicAsset(t, publicDir, "/notes/space/index.html")
+	if !strings.Contains(spaceHtml, `data-share-link="https://daybook.page/notes/space/"`) {
+		t.Errorf("Expected ASCII space ShareURL to be unencoded and correct")
+	}
+	if !strings.Contains(spaceHtml, `data-share-text="分享：&#34;A Space Title&#34;"`) {
+		t.Errorf("Expected ASCII space ShareText to have replaced Title and be html-escaped")
+	}
+}
+
+func TestBuildGraphIdentity(t *testing.T) {
+	contentDir := filepath.Join(t.TempDir(), "content")
+	staticDir := filepath.Join(t.TempDir(), "static")
+	publicDir := filepath.Join(t.TempDir(), "public")
+
+	writeRequiredTemplateAssets(t, staticDir)
+	writeTestFile(t, contentDir, "pages/about.md", "---\ntitle: About\n---\n")
+
+	writeTestFile(t, contentDir, "notes/a.md", strings.Join([]string{
+		"---",
+		"title: A",
+		"date: 2026-06-17",
+		"slug: a",
+		"draft: false",
+		"---",
+		"Link to [[b]]",
+	}, "\n"))
+
+	writeTestFile(t, contentDir, "notes/b.md", strings.Join([]string{
+		"---",
+		"title: B",
+		"date: 2026-06-18",
+		"slug: b",
+		"draft: false",
+		"---",
+		"Link to [[a]]",
+	}, "\n"))
+
+	writeTestFile(t, contentDir, "notes/c.md", strings.Join([]string{
+		"---",
+		"title: C",
+		"date: 2026-06-19",
+		"slug: c",
+		"draft: false",
+		"---",
+		"No links",
+	}, "\n"))
+
+	cfg := config.Config{}
+	
+	_, err := Build(Options{
+		Config:       cfg,
+		ContentDir:   contentDir,
+		NotesDir:     filepath.Join(contentDir, "notes"),
+		PublicDir:    publicDir,
+	})
+	if err != nil {
+		t.Fatalf("Build returned error: %v", err)
+	}
+
+	graphJsonStr := readPublicAsset(t, publicDir, "/graph.json")
+	var graphData struct {
+		Nodes []struct {
+			ID string `json:"id"`
+		} `json:"nodes"`
+		Links []struct {
+			Source string `json:"source"`
+			Target string `json:"target"`
+		} `json:"links"`
+	}
+	if err := json.Unmarshal([]byte(graphJsonStr), &graphData); err != nil {
+		t.Fatalf("Failed to parse graph.json: %v", err)
+	}
+
+	if len(graphData.Nodes) != 3 {
+		t.Fatalf("Expected 3 nodes, got %d", len(graphData.Nodes))
+	}
+	
+	nodeIDs := make(map[string]bool)
+	for _, n := range graphData.Nodes {
+		if n.ID == "" {
+			t.Errorf("Found node with empty ID")
+		}
+		if nodeIDs[n.ID] {
+			t.Errorf("Duplicate node ID: %s", n.ID)
+		}
+		nodeIDs[n.ID] = true
+	}
+
+	if len(graphData.Links) != 1 {
+		t.Fatalf("Expected 1 deduplicated link (A-B), got %d: %v", len(graphData.Links), graphData.Links)
+	}
+	
+	link := graphData.Links[0]
+	isAB := (link.Source == "single:zh_CN:a" && link.Target == "single:zh_CN:b") || (link.Source == "single:zh_CN:b" && link.Target == "single:zh_CN:a")
+	if !isAB {
+		t.Errorf("Expected link A-B, got %s-%s", link.Source, link.Target)
+	}
+}

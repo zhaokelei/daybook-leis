@@ -1,0 +1,49 @@
+# Build output
+/public/
+/daybook
+/bin/
+
+# Go generated files
+*.test
+coverage.out
+*.prof
+
+# Future search output
+/.pagefind/
+
+# Local caches
+/.cache/
+/tmp/
+/temp/
+
+# Temporary files
+*.tmp
+*.log
+
+# macOS
+.DS_Store
+
+# Obsidian
+**/.obsidian/*
+!**/.obsidian/app.json
+
+# Keep directory placeholders
+Thumbs.db
+
+# Local environment
+.env
+.env.*
+!.env.example
+/config.yaml
+
+# Editors
+.vscode/
+.idea/
+
+# Dependencies
+node_modules/
+
+# README files in subdirectories
+[Rr][Ee][Aa][Dd][Mm][Ee].*
+!/README.md
+!/readme.md

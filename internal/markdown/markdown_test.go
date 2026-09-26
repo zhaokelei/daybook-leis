@@ -1,0 +1,455 @@
+package markdown
+
+import (
+	"fmt"
+	"os/exec"
+	"strings"
+	"testing"
+)
+
+func TestToHTMLWithHeadings(t *testing.T) {
+	document, err := ToHTMLWithHeadings("## First Heading\n\nText.\n\n### Second Heading\n")
+	if err != nil {
+		t.Fatalf("ToHTMLWithHeadings returned error: %v", err)
+	}
+
+	if len(document.Headings) != 2 {
+		t.Fatalf("Headings length = %d, want 2", len(document.Headings))
+	}
+	if document.Headings[0].Level != 2 || document.Headings[0].Text != "First Heading" || document.Headings[0].ID == "" {
+		t.Fatalf("first heading = %#v, want level 2 with text and id", document.Headings[0])
+	}
+	if !strings.Contains(document.HTML, `id="`+document.Headings[0].ID+`"`) {
+		t.Fatalf("HTML does not contain first heading id %q: %s", document.Headings[0].ID, document.HTML)
+	}
+}
+
+func TestToHTMLWithGFM(t *testing.T) {
+	document, err := ToHTMLWithHeadings("~~old~~\n\n- [x] done\n- [ ] todo\n\n| A | B |\n| --- | --- |\n| **strong** | ~~deleted~~ |\n")
+	if err != nil {
+		t.Fatalf("ToHTMLWithHeadings returned error: %v", err)
+	}
+
+	wantParts := []string{
+		"<del>old</del>",
+		`<input checked="" disabled="" type="checkbox"> done`,
+		`<input disabled="" type="checkbox"> todo`,
+		"<table>",
+		"<strong>strong</strong>",
+		"<del>deleted</del>",
+	}
+	for _, part := range wantParts {
+		if !strings.Contains(document.HTML, part) {
+			t.Fatalf("HTML does not contain %q: %s", part, document.HTML)
+		}
+	}
+}
+
+func TestToHTMLWithNestedTaskList(t *testing.T) {
+	document, err := ToHTMLWithHeadings("- [ ] parent\n  - [ ] child\n    - [x] grandchild\n")
+	if err != nil {
+		t.Fatalf("ToHTMLWithHeadings returned error: %v", err)
+	}
+
+	wantParts := []string{
+		`<li><input disabled="" type="checkbox"> parent`,
+		`<ul>`,
+		`<li><input disabled="" type="checkbox"> child`,
+		`<li><input checked="" disabled="" type="checkbox"> grandchild</li>`,
+	}
+	for _, part := range wantParts {
+		if !strings.Contains(document.HTML, part) {
+			t.Fatalf("HTML does not contain %q: %s", part, document.HTML)
+		}
+	}
+}
+
+func TestToHTMLWithFigureCaptions(t *testing.T) {
+	document, err := ToHTMLWithHeadings("![A caption](/images/example.webp)\n\n![_Hidden caption](/images/hidden.webp)\n\n![](/images/plain.webp)\n\nText ![inline](/images/inline.webp) image.\n")
+	if err != nil {
+		t.Fatalf("ToHTMLWithHeadings returned error: %v", err)
+	}
+
+	wantParts := []string{
+		`<figure><img src="/images/example.webp" alt="A caption" loading="lazy" decoding="async"><figcaption>A caption</figcaption></figure>`,
+		`<p><img src="/images/hidden.webp" alt="Hidden caption" loading="lazy" decoding="async"></p>`,
+		`<p><img src="/images/plain.webp" alt="" loading="lazy" decoding="async"></p>`,
+		`<p>Text <img src="/images/inline.webp" alt="inline"> image.</p>`,
+	}
+	for _, part := range wantParts {
+		if !strings.Contains(document.HTML, part) {
+			t.Fatalf("HTML does not contain %q: %s", part, document.HTML)
+		}
+	}
+}
+
+func TestToHTMLWithGitHubAlerts(t *testing.T) {
+	document, err := ToHTMLWithHeadings("> [!WARNING]\n> **Careful** with this.\n> - List item\n")
+	if err != nil {
+		t.Fatalf("ToHTMLWithHeadings returned error: %v", err)
+	}
+
+	wantParts := []string{
+		`<div class="callout" data-callout="warning">`,
+		`<div class="callout-title"><span class="callout-icon material-symbol">warning</span><div class="callout-title-inner">Warning</div></div>`,
+		`<strong>Careful</strong>`,
+		`<li>List item</li>`,
+	}
+	for _, part := range wantParts {
+		if !strings.Contains(document.HTML, part) {
+			t.Fatalf("HTML does not contain %q: %s", part, document.HTML)
+		}
+	}
+}
+
+func TestToHTMLWithContainerDirectives(t *testing.T) {
+	input := strings.Join([]string{
+		":::note[Custom Title]",
+		"Body with **markdown**.",
+		":::",
+		"",
+		":::fold[More]",
+		"- hidden item",
+		":::",
+		"",
+		":::gallery",
+		"![One](/images/one.webp)",
+		"![Two](/images/two.webp)",
+		":::",
+	}, "\n")
+
+	document, err := ToHTMLWithHeadings(input)
+	if err != nil {
+		t.Fatalf("ToHTMLWithHeadings returned error: %v", err)
+	}
+
+	wantParts := []string{
+		`<div class="callout" data-callout="note">`,
+		`<div class="callout-title"><span class="callout-icon material-symbol">info</span><div class="callout-title-inner">Custom Title</div></div>`,
+		`Body with <strong>markdown</strong>.`,
+		`<details class="md-fold"><summary>More</summary>`,
+		`<li>hidden item</li>`,
+		`<div class="md-gallery">`,
+		`<figure><img src="/images/one.webp" alt="One" loading="lazy" decoding="async"><figcaption>One</figcaption></figure>`,
+		`<figure><img src="/images/two.webp" alt="Two" loading="lazy" decoding="async"><figcaption>Two</figcaption></figure>`,
+	}
+	for _, part := range wantParts {
+		if !strings.Contains(document.HTML, part) {
+			t.Fatalf("HTML does not contain %q: %s", part, document.HTML)
+		}
+	}
+}
+
+func TestToHTMLWithLeafEmbeds(t *testing.T) {
+	input := strings.Join([]string{
+		`::github{repo="StatIndet/daybook"}`,
+		`::youtube{id="9pP0pIgP2kE"}`,
+		`::bilibili{id="BV1sK4y1Z7KG"}`,
+		`::spotify{url="https://open.spotify.com/track/0HYAsQwJIO6FLqpyTeD3l6"}`,
+		`::codepen{url="https://codepen.io/jh3y/pen/NWdNMBJ"}`,
+		`::music{url="https://example.com/audio.mp3" title="Test Song"}`,
+		`::tweet{url="https://x.com/hachi_08/status/1906456524337123549"}`,
+	}, "\n\n")
+
+	document, err := ToHTMLWithHeadings(input)
+	if err != nil {
+		t.Fatalf("ToHTMLWithHeadings returned error: %v", err)
+	}
+
+	wantParts := []string{
+		`class="no-heti gc-container"`,
+		`href="https://github.com/StatIndet/daybook"`,
+		`youtube-nocookie.com/embed/9pP0pIgP2kE`,
+		`player.bilibili.com/player.html?`,
+		`bvid=BV1sK4y1Z7KG`,
+		`open.spotify.com/embed/track/0HYAsQwJIO6FLqpyTeD3l6`,
+		`codepen.io/jh3y/embed/NWdNMBJ?default-tab=result`,
+		`class="music-custom-player"`,
+		`https://example.com/audio.mp3`,
+		`Test Song`,
+		`class="twitter-tweet"`,
+		`status/1906456524337123549`,
+	}
+	for _, part := range wantParts {
+		if !strings.Contains(document.HTML, part) {
+			t.Fatalf("HTML does not contain %q: %s", part, document.HTML)
+		}
+	}
+}
+
+func TestToHTMLWithFootnote(t *testing.T) {
+	document, err := ToHTMLWithHeadings("A note.[^a]\n\n[^a]: Footnote text.\n")
+	if err != nil {
+		t.Fatalf("ToHTMLWithHeadings returned error: %v", err)
+	}
+
+	if !strings.Contains(document.HTML, `class="footnotes"`) || !strings.Contains(document.HTML, "Footnote text") {
+		t.Fatalf("HTML does not contain rendered footnote: %s", document.HTML)
+	}
+}
+
+func TestToHTMLWithHighlightedCode(t *testing.T) {
+	document, err := ToHTMLWithHeadings("```go\nfunc main() {}\n```\n")
+	if err != nil {
+		t.Fatalf("ToHTMLWithHeadings returned error: %v", err)
+	}
+
+	wantParts := []string{
+		`<div class="highlight"><button class="code-copy-button" type="button" aria-label="复制代码">`,
+		`<span class="material-symbol" aria-hidden="true">content_copy</span>`,
+		`<pre tabindex="0" class="chroma">`,
+		`<code>`,
+		`class="kd"`,
+		`class="nf"`,
+	}
+	for _, part := range wantParts {
+		if !strings.Contains(document.HTML, part) {
+			t.Fatalf("HTML does not contain %q: %s", part, document.HTML)
+		}
+	}
+}
+
+func TestToHTMLWithPlainCodeFallback(t *testing.T) {
+	document, err := ToHTMLWithHeadings("```moo\nplain <code> & text\n```\n")
+	if err != nil {
+		t.Fatalf("ToHTMLWithHeadings returned error: %v", err)
+	}
+
+	wantParts := []string{
+		`<div class="highlight is-plain"><button class="code-copy-button" type="button" aria-label="复制代码">`,
+		`<span class="material-symbol" aria-hidden="true">content_copy</span>`,
+		`<pre tabindex="0"><code class="language-moo" data-lang="moo">`,
+		`plain &lt;code&gt; &amp; text`,
+		`</code></pre></div>`,
+	}
+	for _, part := range wantParts {
+		if !strings.Contains(document.HTML, part) {
+			t.Fatalf("HTML does not contain %q: %s", part, document.HTML)
+		}
+	}
+	if strings.Contains(document.HTML, "<code> & text") {
+		t.Fatalf("HTML did not escape plain code fallback: %s", document.HTML)
+	}
+	if document.HasMermaid {
+		t.Fatal("plain code block should not set HasMermaid")
+	}
+}
+
+func TestToHTMLWithMermaidCodeBlock(t *testing.T) {
+	document, err := ToHTMLWithHeadings("```mermaid\ngraph TD\nA --> B\n```\n")
+	if err != nil {
+		t.Fatalf("ToHTMLWithHeadings returned error: %v", err)
+	}
+
+	if !document.HasMermaid {
+		t.Fatal("Mermaid code block should set HasMermaid")
+	}
+	wantParts := []string{
+		`<div class="mermaid-block" data-mermaid-status="pending">`,
+		`<pre class="mermaid-source"><code>graph TD`,
+		`A --&gt; B`,
+		`<div class="mermaid-diagram" aria-hidden="true"></div>`,
+		`<p class="mermaid-error" hidden></p>`,
+	}
+	for _, part := range wantParts {
+		if !strings.Contains(document.HTML, part) {
+			t.Fatalf("HTML does not contain %q: %s", part, document.HTML)
+		}
+	}
+	for _, forbidden := range []string{`language-mermaid`, `<div class="highlight"`} {
+		if strings.Contains(document.HTML, forbidden) {
+			t.Fatalf("Mermaid block should not be rendered as highlighted code containing %q: %s", forbidden, document.HTML)
+		}
+	}
+}
+
+func TestToHTMLWithEmptyMermaidCodeBlock(t *testing.T) {
+	document, err := ToHTMLWithHeadings("```mermaid\n```\n")
+	if err != nil {
+		t.Fatalf("ToHTMLWithHeadings returned error: %v", err)
+	}
+
+	if !document.HasMermaid {
+		t.Fatal("empty Mermaid code block should still set HasMermaid")
+	}
+	if !strings.Contains(document.HTML, `<div class="mermaid-block"`) {
+		t.Fatalf("HTML does not contain Mermaid fallback container: %s", document.HTML)
+	}
+}
+
+func TestToHTMLWithNoLanguageCodeFallback(t *testing.T) {
+	document, err := ToHTMLWithHeadings("```\nplain text\n```\n")
+	if err != nil {
+		t.Fatalf("ToHTMLWithHeadings returned error: %v", err)
+	}
+
+	if !strings.Contains(document.HTML, `<pre tabindex="0"><code>plain text`) {
+		t.Fatalf("HTML does not contain highlighted code classes: %s", document.HTML)
+	}
+	if document.HasMermaid {
+		t.Fatal("no-language code block should not set HasMermaid")
+	}
+}
+
+func TestRawHTMLPolicy(t *testing.T) {
+	tests := []struct {
+		name           string
+		input          string
+		mustContain    []string
+		mustNotContain []string
+	}{
+		{
+			name:        "Case 1: Normal table",
+			input:       "<table>\n<tr>\n<td>Hello</td>\n</tr>\n</table>\n",
+			mustContain: []string{"<table>", "<tr>", "<td>Hello</td>", "</tr>", "</table>"},
+		},
+		{
+			name:        "Case 2: Table + remote image",
+			input:       "<table>\n<tr>\n<td>\n<img src=\"https://static.daybook.page/picture/test.png\" alt=\"test\">\n</td>\n</tr>\n</table>\n",
+			mustContain: []string{"<img src=\"https://static.daybook.page/picture/test.png\" alt=\"test\">"},
+		},
+		{
+			name:           "Case 5: Top level script",
+			input:          "<script>alert(1)</script>\n",
+			mustNotContain: []string{"<script>", "alert(1)"},
+		},
+		{
+			name:           "Case 6: Script inside table",
+			input:          "<table>\n<tr>\n<td>\n<script>alert(1)</script>\n</td>\n</tr>\n</table>\n",
+			mustContain:    []string{"<table>", "<td>"},
+			mustNotContain: []string{"<script>", "alert(1)"},
+		},
+		{
+			name:           "Case 7: Dangerous event attribute",
+			input:          "<table>\n<tr>\n<td>\n<img src=\"x\" onerror=\"alert(1)\">\n</td>\n</tr>\n</table>\n",
+			mustContain:    []string{"<img src=\"x\">"},
+			mustNotContain: []string{"onerror", "alert(1)"},
+		},
+		{
+			name:           "Case 8: Javascript URL",
+			input:          "<a href=\"javascript:alert(1)\">test</a>\n",
+			mustContain:    []string{"test"}, // inner text should be preserved
+			mustNotContain: []string{"javascript:", "alert(1)"},
+		},
+		{
+			name:        "Case 9: Normal link works",
+			input:       "<a href=\"https://example.com\">Example</a>\n",
+			mustContain: []string{"<a href=\"https://example.com\">Example</a>"},
+		},
+		{
+			name:        "Case 10: Other safe HTML",
+			input:       "<details>\n  <summary>Hello</summary>\n  World\n</details>\n",
+			mustContain: []string{"<details>", "<summary>Hello</summary>"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			document, err := ToHTMLWithHeadings(tt.input)
+			if err != nil {
+				t.Fatalf("ToHTMLWithHeadings returned error: %v", err)
+			}
+			for _, part := range tt.mustContain {
+				if !strings.Contains(document.HTML, part) {
+					t.Errorf("HTML missing %q:\n%s", part, document.HTML)
+				}
+			}
+			for _, part := range tt.mustNotContain {
+				if strings.Contains(document.HTML, part) {
+					t.Errorf("HTML should not contain %q:\n%s", part, document.HTML)
+				}
+			}
+		})
+	}
+}
+
+func TestToHTMLWithMath(t *testing.T) {
+	if _, err := exec.LookPath("node"); err != nil {
+		t.Skip("node is not installed, skipping KaTeX SSR test")
+	}
+
+	document, err := ToHTMLWithHeadings("Some math $x = 1$ inline.\n\n$$\ny = 2\n$$\n\nAnother paragraph.")
+	if err != nil {
+		t.Fatalf("ToHTMLWithHeadings returned error: %v", err)
+	}
+
+	if !strings.Contains(document.HTML, `<span class="math math-inline">`) {
+		t.Fatalf("HTML does not contain rendered inline math: %s", document.HTML)
+	}
+	if !strings.Contains(document.HTML, `<div class="math math-display">`) {
+		t.Fatalf("HTML does not contain rendered display math: %s", document.HTML)
+	}
+
+	if strings.Contains(document.HTML, `<p><div class="math math-display">`) || strings.Contains(document.HTML, `<p><div class="katex-display">`) {
+		t.Fatalf("Display math should not be wrapped in <p> tag: %s", document.HTML)
+	}
+}
+
+func TestHeadingID(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantIDs []string
+	}{
+		{
+			name:    "English",
+			input:   "## Installation",
+			wantIDs: []string{"#Installation"},
+		},
+		{
+			name:    "Whitespace",
+			input:   "## Getting   Started",
+			wantIDs: []string{"#Getting-Started"},
+		},
+		{
+			name:    "CJK",
+			input:   "## 安装方法",
+			wantIDs: []string{"#安装方法"},
+		},
+		{
+			name:    "Mixed language",
+			input:   "## Daybook 安装",
+			wantIDs: []string{"#Daybook-安装"},
+		},
+		{
+			name:    "Different levels",
+			input:   "## Test\n### Test\n#### Test",
+			wantIDs: []string{"#Test", "##Test", "###Test"},
+		},
+		{
+			name:    "Duplicate same-level headings",
+			input:   "## Test\n## Test\n## Test",
+			wantIDs: []string{"#Test", "#Test-2", "#Test-3"},
+		},
+		{
+			name:    "Collision",
+			input:   "## Test\n## Test\n## Test-2",
+			wantIDs: []string{"#Test", "#Test-2", "#Test-2-2"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			doc, err := ToHTMLWithHeadings(tt.input)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if len(doc.Headings) != len(tt.wantIDs) {
+				t.Fatalf("got %d headings, want %d", len(doc.Headings), len(tt.wantIDs))
+			}
+
+			for i, h := range doc.Headings {
+				if h.ID != tt.wantIDs[i] {
+					t.Errorf("heading %d ID: got %q, want %q", i, h.ID, tt.wantIDs[i])
+				}
+
+				// verify HTML id attribute
+				expectedAttr := fmt.Sprintf(`id="%s"`, h.ID)
+				if !strings.Contains(doc.HTML, expectedAttr) {
+					t.Errorf("HTML does not contain id attribute %q: %s", expectedAttr, doc.HTML)
+				}
+			}
+		})
+	}
+}

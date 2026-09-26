@@ -1,0 +1,328 @@
+.archive-page {
+  min-width: 0;
+  width: min(var(--note-body-width), 100%);
+}
+
+.archive-timeline {
+  min-width: 0;
+}
+
+.archive-header {
+  margin-bottom: clamp(2rem, 4vw, 3.5rem);
+}
+
+.archive-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2rem;
+  align-items: baseline;
+  font-family: var(--font-serif);
+}
+
+.archive-stat-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+
+.archive-stat-num {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--color-text);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.archive-stat-unit {
+  font-size: 0.95rem;
+  color: var(--color-muted);
+  font-weight: 500;
+}
+
+.archive-stats-secondary {
+  margin-top: 1.25rem;
+  gap: 1.5rem;
+  font-family: var(--font-meta);
+  font-style: italic;
+}
+
+.archive-stats-secondary .archive-stat-num {
+  font-size: 1.35rem;
+  font-weight: 600;
+}
+
+.archive-stats-secondary .archive-stat-unit {
+  font-size: 1.35rem;
+  letter-spacing: 0.05em;
+}
+
+.archive-year {
+  display: grid;
+  gap: clamp(1.6rem, 4vw, 2.4rem);
+  grid-template-columns: 5.2rem minmax(0, 1fr);
+  position: relative;
+}
+
+.archive-year + .archive-year {
+  margin-top: clamp(2.8rem, 6vw, 4.5rem);
+}
+
+.archive-year h2 {
+  color: var(--color-text);
+  font-family: var(--font-meta);
+  font-size: clamp(1.35rem, 2.6vw, 1.75rem);
+  font-style: italic;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1;
+  margin: 0;
+}
+
+.archive-list {
+  --archive-dot-size: 9px;
+  --archive-list-pad: 1.45rem;
+
+  border-left: 1px solid var(--color-line);
+  display: grid;
+  gap: 1.9rem;
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 var(--archive-list-pad);
+}
+
+.archive-item {
+  display: grid;
+  gap: clamp(0.9rem, 3vw, 1.35rem);
+  grid-template-columns: 4.2rem minmax(0, 1fr);
+  position: relative;
+}
+
+.archive-item::before {
+  background: var(--color-page);
+  border: 1.5px solid var(--color-line);
+  border-color: color-mix(in srgb, var(--color-muted) 35%, var(--color-line));
+  border-radius: 999px;
+  content: "";
+  height: var(--archive-dot-size);
+  left: calc(-1 * var(--archive-list-pad) - 4.5px);
+  position: absolute;
+  top: 0.38rem;
+  transition:
+    background-color 250ms ease,
+    border-color 250ms ease,
+    box-shadow 250ms ease;
+  width: var(--archive-dot-size);
+  z-index: 1;
+}
+
+.archive-item:hover::before,
+.archive-item:focus-within::before {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-page);
+}
+
+.archive-item time {
+  color: var(--color-muted);
+  font-family: var(--font-meta);
+  font-size: 0.96rem;
+  font-style: italic;
+  line-height: 1.25;
+  transition: color 200ms ease;
+  white-space: nowrap;
+}
+
+.archive-entry {
+  min-width: 0;
+}
+
+.archive-entry a {
+  color: var(--color-text);
+  font-family: var(--font-serif);
+  font-size: 1.02rem;
+  font-weight: 700;
+  line-height: 1.4;
+  text-decoration: none;
+  transition: color 200ms ease;
+}
+
+.archive-item:hover time,
+.archive-item:focus-within time {
+  color: var(--color-muted);
+}
+
+.archive-item:hover .archive-entry a,
+.archive-item:focus-within .archive-entry a,
+.archive-entry a:hover,
+.archive-entry a:focus-visible {
+  color: var(--color-hover-text);
+}
+
+.archive-entry a:focus-visible {
+  outline: 1px solid var(--color-accent);
+  outline-offset: 4px;
+}
+
+.archive-reading-time {
+  color: var(--color-muted);
+  display: inline-block;
+  font-family: var(--font-meta);
+  font-size: 1.02rem;
+  font-style: italic;
+  margin-left: 0.65rem;
+  white-space: nowrap;
+}
+
+.archive-entry p,
+.archive-empty {
+  color: var(--color-muted);
+  font-family: var(--font-body);
+  font-size: 0.94rem;
+  line-height: 1.75;
+}
+
+.archive-entry p {
+  margin: 0.45rem 0 0;
+}
+
+.archive-empty {
+  margin: 0;
+}
+
+@media (max-width: 960px) {
+  .archive-page {
+    width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .archive-stats {
+    gap: 1.5rem;
+  }
+  
+  .archive-stat-num {
+    font-size: 2.1rem;
+  }
+
+  .archive-year {
+    display: block;
+  }
+
+  .archive-year h2 {
+    margin-bottom: 1.4rem;
+  }
+
+  .archive-list {
+    --archive-list-pad: 1.2rem;
+  }
+
+  .archive-item {
+    grid-template-columns: 3.7rem minmax(0, 1fr);
+  }
+
+  .archive-reading-time {
+    display: block;
+    margin: 0.25rem 0 0;
+  }
+
+  .archive-entry p {
+    display: none;
+  }
+}
+
+/* Virtual List Flattened Styles */
+.archive-virtual-list {
+  --archive-year-column: 5.2rem;
+  --archive-column-gap: clamp(1.6rem, 4vw, 2.4rem);
+  --archive-axis-x: calc(var(--archive-year-column) + var(--archive-column-gap));
+  position: relative;
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .archive-virtual-list {
+    --archive-axis-x: 0px;
+  }
+}
+
+.archive-virtual-list::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  left: var(--archive-axis-x);
+  background: var(--color-line);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.archive-virtual-row {
+  display: grid;
+  gap: var(--archive-column-gap);
+  grid-template-columns: var(--archive-year-column) minmax(0, 1fr);
+  position: relative;
+}
+.archive-year-row {
+  padding-top: clamp(2.8rem, 6vw, 4.5rem);
+}
+.archive-year-row.is-first-year {
+  padding-top: 0;
+}
+.archive-year-row h2 {
+  color: var(--color-text);
+  font-family: var(--font-meta);
+  font-size: clamp(1.35rem, 2.6vw, 1.75rem);
+  font-style: italic;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1;
+  margin: 0;
+  grid-column: 1;
+}
+
+.archive-item-track {
+  --archive-dot-size: 9px;
+  --archive-list-pad: 1.45rem;
+  border-left: none; /* removed per instructions */
+  padding: 0 0 1.9rem var(--archive-list-pad);
+  grid-column: 2;
+  position: relative;
+  height: 100%;
+}
+/* For mobile spacing override */
+@media (max-width: 640px) {
+  .archive-item-track {
+    --archive-list-pad: 1.2rem;
+  }
+}
+
+/* Adjust .archive-item which is now inside .archive-item-track */
+.archive-item-track .archive-item {
+  display: grid;
+  gap: clamp(0.9rem, 3vw, 1.35rem);
+  grid-template-columns: 4.2rem minmax(0, 1fr);
+  position: relative;
+  opacity: 1;
+  transform: none;
+}
+
+.archive-item-row.is-pending-reveal .archive-item {
+  opacity: 0;
+}
+.archive-item-row.is-seen .archive-item {
+  opacity: 1 !important;
+  animation: none !important;
+  transform: none !important;
+}
+
+/* Mobile overrides for flattened rows */
+@media (max-width: 640px) {
+  .archive-virtual-row {
+    display: block;
+  }
+  .archive-year-row h2 {
+    margin-bottom: 1.4rem;
+    padding-left: var(--archive-list-pad, 1.2rem);
+  }
+}

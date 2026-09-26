@@ -1,0 +1,713 @@
+.media-manager-container {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+
+.mm-hidden-svg {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+.mm-desktop-ui {
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  bottom: 3.5rem; /* above footer/bottom spacing */
+  
+  /* --- 尺寸解耦配置区域 --- */
+  --mm-expanded-left: 24px;     /* 展开时，距离屏幕左侧边缘的间距 */
+  --mm-collapsed-visible: 48px; /* 缩回隐藏时，肉眼看到的把手总宽度 (包含上面那个间距) */
+  
+  left: var(--mm-expanded-left); 
+  z-index: 890; /* lower than side-nav if needed */
+  pointer-events: none;
+  background-color: var(--m3-surface-container-highest, var(--color-surface-container-high));
+  border-radius: 1.5rem;
+  padding: 0;
+  width: 220px; /* Increased width */
+  height: 430px; /* Increased to fit playlist button without squishing */
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  /* /* overflow: hidden; */ Removed to allow 3D flip without clipping/flattening */
+
+  
+  /* Initial hidden state completely off-screen */
+  opacity: 0;
+  transform: translateX(-150%);
+  transition: transform 0.4s cubic-bezier(0.2, 0, 0, 1), opacity 0.3s ease;
+}
+
+/* 激活后台播放时，进入“收缩”状态 (露出 48px 的 Tab) */
+body[data-media-manager-active="true"] .mm-desktop-ui {
+  pointer-events: auto;
+  opacity: 1;
+  /* 自动计算推移距离：刚好让卡片的右边缘留在 visible 设定好的像素处 */
+  transform: translateX(calc(var(--mm-collapsed-visible) - var(--mm-expanded-left) - 100%)); 
+}
+
+/* Hover 时完全展开 */
+body[data-media-manager-active="true"] .mm-desktop-ui:hover,
+body[data-media-manager-active="true"] .mm-desktop-ui:focus-within {
+  transform: translateX(0);
+}
+
+/* --- Collapsed Tab View --- */
+.mm-collapsed-tab {
+  position: absolute;
+  top: 0;
+  right: 0;
+  /* 内部元素的盒子宽度等于屏幕上露出的全部白块，这样绝对居中就不会受到原点平移的影响 */
+  width: var(--mm-collapsed-visible);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1.2rem 0;
+  opacity: 1;
+  transition: opacity 0.2s ease;
+  pointer-events: none; /* let hover pass to parent */
+  box-sizing: border-box;
+}
+
+body[data-media-manager-active="true"] .mm-desktop-ui:hover .mm-collapsed-tab,
+body[data-media-manager-active="true"] .mm-desktop-ui:focus-within .mm-collapsed-tab {
+  opacity: 0;
+}
+
+.mm-small-cover {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+  margin-bottom: 1rem;
+}
+
+.mm-vertical-title {
+  writing-mode: vertical-lr;
+  font-family: var(--font-headline);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-on-surface);
+  white-space: nowrap;
+  /* overflow: hidden; */
+  text-overflow: ellipsis;
+  max-height: 280px;
+  letter-spacing: 0.05em;
+}
+
+/* --- Expanded Full View --- */
+.mm-expanded-view {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  padding: 1.5rem 1rem;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+  box-sizing: border-box;
+  position: relative;
+}
+
+body[data-media-manager-active="true"] .mm-desktop-ui:hover .mm-expanded-view,
+body[data-media-manager-active="true"] .mm-desktop-ui:focus-within .mm-expanded-view {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* 艺术组合区域 (画布 + 封面) */
+.mm-art-group {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  margin-top: 6px;
+  margin-bottom: 1.2rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* 动态波浪画板 */
+.mm-visualizer-canvas {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 128.57% !important; /* 180px / 140px ≈ 128.57% */
+  height: 128.57% !important;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.mm-cover-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  z-index: 2;
+  /* Cover Spin Animation on Wrapper */
+  animation: mm-spin-cover 23.5s linear infinite;
+  animation-play-state: paused;
+}
+
+.mm-cover-clipper {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  contain: paint; /* isolate paint layer */
+  /* transform: translateZ(0); Removed to prevent 3D bleed-through when flipped */
+  -webkit-clip-path: url(#mm-cookie-clip);
+  clip-path: url(#mm-cookie-clip);
+}
+
+.mm-image-container {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+}
+
+.is-playing .mm-cover-wrapper,
+.mm-expanded-view.is-playing .mm-cover-wrapper {
+  animation-play-state: running;
+}
+
+@keyframes mm-spin-cover {
+  from { transform: rotate(360deg); }
+  to { transform: rotate(0deg); }
+}
+
+.mm-cover-image {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 142%; /* sqrt(2)*100 to cover corners during rotation */
+  height: 142%;
+  max-width: none;
+  max-height: none;
+  object-fit: cover;
+  /* Counter-spin so image stays upright */
+  animation: mm-counter-spin 23.5s linear infinite;
+  animation-play-state: paused;
+  transform: translate(-50%, -50%) rotate(0deg);
+}
+
+.is-playing .mm-cover-image,
+.mm-expanded-view.is-playing .mm-cover-image {
+  animation-play-state: running;
+}
+
+@keyframes mm-counter-spin {
+  from { transform: translate(-50%, -50%) rotate(-360deg); }
+  to { transform: translate(-50%, -50%) rotate(0deg); }
+}
+
+.mm-info-wrapper {
+  text-align: center;
+  margin-bottom: 1.2rem;
+  width: 100%;
+  padding: 0 10px;
+  box-sizing: border-box;
+}
+
+.mm-title {
+  font-family: var(--font-headline);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--color-primary, var(--color-on-surface));
+  white-space: nowrap;
+  /* overflow: hidden; */
+  text-overflow: ellipsis;
+  margin-bottom: 0.2rem;
+}
+
+.mm-artist {
+  font-size: 0.85rem;
+  color: var(--color-on-surface-variant);
+  white-space: nowrap;
+  /* overflow: hidden; */
+  text-overflow: ellipsis;
+}
+
+/* 控制按钮组 */
+.mm-controls-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 0.8rem;
+  width: 100%;
+}
+
+.mm-controls-wrapper button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: var(--color-on-surface);
+  transition: border-radius 0.4s cubic-bezier(0.2, 0, 0, 1), transform 0.2s cubic-bezier(0.2, 0, 0, 1), background-color 0.2s ease, color 0.2s ease;
+}
+
+.mm-controls-wrapper button:active {
+  transform: scale(0.9);
+}
+
+.mm-controls-wrapper .mm-btn-prev,
+.mm-controls-wrapper .mm-btn-next {
+  width: 48px;
+  height: 48px;
+  border-radius: 24px;
+  background-color: transparent;
+  color: var(--color-on-surface);
+  transition: background-color 0.2s ease, transform 0.2s cubic-bezier(0.42, 1.67, 0.21, 0.9), width 0.15s cubic-bezier(0.42, 1.67, 0.21, 0.9);
+}
+
+.mm-controls-wrapper button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mm-controls-wrapper .mm-btn-play-pause {
+  width: 72px;
+  height: 48px;
+  border-radius: 24px; /* Pill by default (Paused, shows Play) */
+  background-color: var(--color-accent);
+  color: var(--color-page);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Use bouncy easing for recovery (width returning to normal) */
+  transition: width 0.3s cubic-bezier(0.42, 1.67, 0.21, 0.9), border-radius 0.3s cubic-bezier(0.42, 1.67, 0.21, 0.9);
+}
+
+.is-playing .mm-controls-wrapper .mm-btn-play-pause {
+  /* Checked radius when playing (shows Pause) */
+  border-radius: 12px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .mm-controls-wrapper .mm-btn-prev:hover,
+  .mm-controls-wrapper .mm-btn-next:hover {
+    background-color: var(--color-surface-variant, rgba(0, 0, 0, 0.05));
+  }
+
+  .mm-controls-wrapper .mm-btn-play-pause:hover {
+    filter: brightness(1.1);
+  }
+
+  /* Only use pure CSS :active on desktop, because iOS Safari has sticky :active bugs */
+  .mm-controls-wrapper .mm-btn-prev:active,
+  .mm-controls-wrapper .mm-btn-next:active {
+    width: 40px;
+  }
+
+  .mm-controls-wrapper .mm-btn-play-pause:active {
+    border-radius: 8px !important;
+    width: 96px;
+    transition: width 0.15s cubic-bezier(0.42, 1.67, 0.21, 0.9), border-radius 0.15s cubic-bezier(0.42, 1.67, 0.21, 0.9);
+  }
+}
+
+/* Global JS-triggered fallback for all devices (especially touch devices) */
+.mm-controls-wrapper .mm-btn-prev.is-pressed,
+.mm-controls-wrapper .mm-btn-next.is-pressed {
+  width: 40px; /* Squish effect */
+}
+
+.mm-controls-wrapper .mm-btn-play-pause.is-pressed {
+  border-radius: 8px !important;
+  /* Expand width when clicked */
+  width: 96px;
+  /* Fast bouncy deformation */
+  transition: width 0.15s cubic-bezier(0.42, 1.67, 0.21, 0.9), border-radius 0.15s cubic-bezier(0.42, 1.67, 0.21, 0.9);
+}
+
+/* Morphing SVG Icon */
+.mm-morph-icon {
+  width: 24px;
+  height: 24px;
+  color: currentColor;
+}
+
+.mm-morph-path {
+  /* Play state (default) */
+  d: path('M 8 5 L 13 8.18 L 13 15.82 L 8 19 Z M 13 8.18 L 19 12 L 19 12 L 13 15.82 Z');
+  -webkit-transition: d 400ms cubic-bezier(0.2, 0, 0, 1);
+  transition: d 400ms cubic-bezier(0.2, 0, 0, 1);
+  fill: currentColor;
+  will-change: d;
+}
+
+.is-playing .mm-morph-path {
+  /* Pause state */
+  d: path('M 6 5 L 10 5 L 10 19 L 6 19 Z M 14 5 L 18 5 L 18 19 L 14 19 Z');
+}
+
+@media (max-width: 960px) {
+  .mm-desktop-ui {
+    display: none !important;
+  }
+}
+
+/* 禁用后台播放 */
+html[data-bg-playback-disabled="true"] .media-manager-container {
+  display: none !important;
+}
+
+
+.mm-article-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--color-on-surface-variant, var(--color-text-muted));
+  text-decoration: none;
+  font-size: 0.85rem;
+  font-family: var(--font-ui);
+  transition: color 0.3s ease;
+  margin-top: 4px;
+  opacity: 0;
+  transform: translateY(5px);
+  pointer-events: none;
+}
+
+.mm-article-link.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+  transition: color 0.3s ease, opacity 0.4s ease, transform 0.4s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.mm-article-link:hover {
+  color: var(--color-accent);
+}
+
+.mm-article-link .material-symbol {
+  font-size: 1.1rem;
+}
+
+.mm-article-link-text {
+  max-width: 140px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* -------------------------------------- */
+
+
+
+/* --- 3D Flip Structure --- */
+.mm-card-inner {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-style: preserve-3d;
+  border-radius: inherit;
+}
+
+body[data-media-manager-active="true"] .mm-desktop-ui.is-flipped .mm-card-inner {
+  transform: rotateY(-180deg);
+}
+
+.mm-card-front, .mm-card-back {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  border-radius: inherit; /* Apply border-radius here to contain children without container overflow:hidden */
+  /* overflow: hidden; */
+}
+
+.mm-card-front {
+  transform: rotateY(0deg); /* Explicitly defined for Safari 3D rendering */
+}
+
+.mm-card-back {
+  transform: rotateY(180deg);
+}
+
+/* --- Playlist Toggle Button (Front) --- */
+.mm-btn-open-playlist {
+  margin-top: 0.5rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-on-surface-variant);
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  padding: 8px 16px;
+  border-radius: 20px;
+  transition: background-color 0.2s, color 0.2s;
+  pointer-events: auto; /* Since parent might be pointer-events: none */
+}
+
+.mm-btn-open-playlist:hover {
+  background-color: var(--color-surface-variant);
+  color: var(--color-on-surface);
+}
+
+/* --- Playlist View (Back) --- */
+.mm-playlist-view {
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface-elevated, var(--color-page));
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+body[data-media-manager-active="true"] .mm-desktop-ui:hover .mm-playlist-view,
+body[data-media-manager-active="true"] .mm-desktop-ui:focus-within .mm-playlist-view {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.mm-playlist-header {
+  display: flex;
+  align-items: center;
+  padding: 1.2rem 1rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.mm-btn-close-playlist {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-on-surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  margin-right: 12px;
+  border-radius: 50%;
+  transition: background-color 0.2s;
+}
+
+.mm-btn-close-playlist:hover {
+  background-color: var(--color-surface-variant);
+}
+
+.mm-playlist-header-title {
+  font-family: var(--font-headline);
+  font-weight: 600;
+  color: var(--color-on-surface);
+}
+
+.mm-playlist-list {
+  flex: 1;
+  overflow-y: auto;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  /* Custom scrollbar */
+}
+
+.mm-playlist-list::-webkit-scrollbar {
+  width: 6px;
+}
+.mm-playlist-list::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+
+.mm-playlist-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  margin: 4px 8px;
+  border-radius: 8px;
+  position: relative;
+  /* overflow: hidden; */ /* For translating text without horizontal overflow */
+}
+
+.mm-playlist-item:hover {
+  background-color: var(--color-surface-variant);
+}
+
+.mm-playlist-item.is-active {
+  background-color: var(--color-accent-soft, var(--color-surface-variant));
+}
+
+.mm-playlist-item-info {
+  flex: 1;
+  /* overflow: hidden; */
+  display: flex;
+  flex-direction: column;
+  transform: translateX(0);
+  transition: transform 0.35s cubic-bezier(0.42, 1.67, 0.21, 0.9);
+}
+
+.mm-playlist-item.is-active .mm-playlist-item-info {
+  transform: translateX(28px);
+}
+
+.mm-playlist-item-title {
+  font-family: var(--font-ui);
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-on-surface);
+  white-space: nowrap;
+  /* overflow: hidden; */
+  text-overflow: ellipsis;
+}
+
+.mm-playlist-item.is-active .mm-playlist-item-title {
+  color: var(--color-accent);
+}
+
+.mm-playlist-item-artist {
+  font-size: 0.75rem;
+  color: var(--color-on-surface-variant);
+  white-space: nowrap;
+  /* overflow: hidden; */
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+/* Equalizer Animation for Active Track */
+.mm-eq-indicator {
+  position: absolute;
+  left: 14px;
+  display: flex;
+  align-items: center; /* Center vertically */
+  gap: 2px;
+  height: 16px;
+  opacity: 0;
+  transform: scale(0);
+  transform-origin: left center;
+  transition: transform 0.35s cubic-bezier(0.38, 1.21, 0.22, 1),
+              opacity 0.2s ease-out;
+}
+
+.mm-playlist-item.is-active .mm-eq-indicator {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.mm-eq-bar {
+  display: block;
+  width: 4px;
+  border-radius: 2px;
+  background-color: var(--color-accent);
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+}
+
+.mm-eq-bar:nth-child(1) { animation-name: mm-eq-1; animation-duration: 0.45s; }
+.mm-eq-bar:nth-child(2) { animation-name: mm-eq-2; animation-duration: 0.55s; animation-delay: 0.1s; }
+.mm-eq-bar:nth-child(3) { animation-name: mm-eq-3; animation-duration: 0.5s; animation-delay: 0.2s; }
+.mm-eq-bar:nth-child(4) { animation-name: mm-eq-4; animation-duration: 0.45s; animation-delay: 0.3s; }
+
+/* Pause the equalizer when audio is paused */
+.media-manager-container:not(.is-playing) .mm-eq-bar {
+  animation-play-state: paused;
+}
+
+@keyframes mm-eq-1 { 0% { height: 4px; } 100% { height: 12px; } }
+@keyframes mm-eq-2 { 0% { height: 6px; } 100% { height: 16px; } }
+@keyframes mm-eq-3 { 0% { height: 8px; } 100% { height: 14px; } }
+@keyframes mm-eq-4 { 0% { height: 5px; } 100% { height: 10px; } }
+
+/* ==========================================================================
+   Mobile UI (Fullscreen & FAB)
+   ========================================================================== */
+
+/* Hide mobile elements on desktop */
+@media (min-width: 961px) {
+  .mobile-media-fab,
+  .mm-btn-close-mobile {
+    display: none !important;
+  }
+
+  .mm-mobile-ui {
+    display: none !important;
+  }
+}
+
+@media (max-width: 960px) {
+  /* Mobile FAB — mirrors .mobile-toc-fab dimensions */
+  .mobile-media-fab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    right: 0;
+    /* Sit directly above the TOC fab (TOC bottom ≈ 120px, TOC height = 48px, gap = 8px) */
+    bottom: calc(env(safe-area-inset-bottom) + 176px);
+    height: 48px;
+    width: auto;
+    padding: 0 12px 0 16px;
+    border-radius: 24px 0 0 24px;
+    background: var(--color-page);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    border: 1px solid var(--color-line);
+    border-right: none;
+    z-index: 90;
+    cursor: pointer;
+    color: var(--color-text);
+    transition: transform 0.3s cubic-bezier(0.2, 0, 0, 1), opacity 0.3s;
+  }
+
+  .mobile-media-fab.is-hidden {
+    transform: translateX(100%);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .mobile-media-fab-cover {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    object-fit: cover;
+    /* No spin animation */
+  }
+
+  .mm-btn-close-mobile {
+    position: absolute;
+    top: 24px;
+    right: 20px;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: 50%;
+    color: var(--color-muted);
+    z-index: 10;
+    cursor: pointer;
+    transition: color 160ms ease;
+  }
+  .mm-btn-close-mobile:hover,
+  .mm-btn-close-mobile:focus-visible {
+    color: var(--color-hover-text);
+  }
+  .mm-btn-close-mobile .material-symbol {
+    font-size: 1.5rem;
+  }
+}
+
+/* Hide desktop UI on tablet and smaller screens */
+@media (max-width: 960px) {
+  .mm-desktop-ui {
+    display: none !important;
+  }
+}
+
+

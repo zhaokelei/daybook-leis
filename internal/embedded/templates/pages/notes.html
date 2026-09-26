@@ -1,0 +1,37 @@
+{{define "content"}}
+<div class="notes-page">
+  <section class="notes-list article-stage" aria-label="{{T .Lang "nav.notes"}}">
+    
+
+    {{if .PinnedNotes}}
+      <div class="notes-pinned">
+        <div class="notes-month-list">
+          {{range .PinnedNotes}}
+            {{template "note_card" .}}
+          {{end}}
+        </div>
+      </div>
+      <hr class="notes-divider">
+    {{end}}
+
+    {{if .MonthGroups}}
+      {{range .MonthGroups}}
+        <div class="notes-month">
+          <div class="notes-month-list">
+            {{range .Notes}}
+              {{template "note_card" .}}
+            {{end}}
+          </div>
+        </div>
+      {{end}}
+      {{else}}
+      <p class="notes-empty">{{T .Lang "archive.empty"}}</p>
+    {{end}}
+    {{template "pagination" .}}
+    <div class="notes-search-results notes-month-list" hidden></div>
+    <p class="notes-empty notes-filter-empty" hidden>{{T .Lang "search.empty"}}</p>
+  </section>
+
+  {{template "notes_aside" .}}
+</div>
+{{end}}
