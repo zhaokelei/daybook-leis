@@ -297,6 +297,12 @@ body {
 .account-hint.ok { color: #2e7d32; }
 .account-hint.err { color: #c62828; }
 .account-actions { display: flex; justify-content: flex-end; }
+.social-list { display: flex; flex-direction: column; gap: 8px; }
+.social-row { display: flex; align-items: center; gap: 8px; }
+.social-row select { flex: 0 0 130px; }
+.social-row input { flex: 1 1 auto; min-width: 0; }
+.social-row .social-del { flex: 0 0 auto; padding: 4px 10px; border: 1px solid var(--color-line); background: transparent; color: var(--color-muted); border-radius: 6px; cursor: pointer; }
+.social-row .social-del:hover { color: #c62828; border-color: #c62828; }
 
 @media (max-width: 900px) {
   .admin-sidebar { display: none; }
@@ -331,6 +337,7 @@ body {
           <option value="en_US">English</option>
         </select>
         <label class="admin-check"><input type="checkbox" id="f-draft"> 草稿</label>
+        <label class="admin-check"><input type="checkbox" id="f-pin"> 置顶</label>
       </div>
       <div class="admin-meta-row">
         <input class="admin-field grow" id="f-tags" type="text" placeholder="标签，用英文逗号分隔">
@@ -388,6 +395,15 @@ body {
         <label class="account-field"><span>副标题（English）</span><input class="admin-field" id="site-slogan-en" type="text" placeholder="One-line intro"></label>
         <div class="account-hint" id="site-hint"></div>
         <div class="account-actions"><button type="button" class="admin-btn primary" id="btn-save-site">保存站点信息</button></div>
+      </section>
+      <section class="account-block">
+        <div class="account-block-title">社交链接</div>
+        <div id="social-list" class="social-list"></div>
+        <div class="account-actions">
+          <button type="button" class="admin-btn" id="btn-add-social">+ 添加链接</button>
+          <button type="button" class="admin-btn primary" id="btn-save-social">保存社交链接</button>
+        </div>
+        <div class="account-hint" id="social-hint"></div>
       </section>
       <section class="account-block">
         <div class="account-block-title">头像</div>
@@ -498,6 +514,7 @@ body {
     el("f-lang").value = note.lang || "zh_CN";
     el("f-i18n-key").value = note.i18nKey || "";
     el("f-draft").checked = !!note.draft;
+    el("f-pin").checked = !!note.pin;
     el("f-tags").value = (note.tags || []).join(", ");
     el("f-summary").value = note.summary || "";
     editor.value = note.body || "";
@@ -519,7 +536,7 @@ body {
 
   function newNote() {
     currentSlug = "";
-    fillForm({ isNew: true, title: "", slug: today(), date: today(), lang: "zh_CN", i18nKey: "", tags: [], summary: "", body: "" });
+    fillForm({ isNew: true, title: "", slug: today(), date: today(), lang: "zh_CN", i18nKey: "", tags: [], summary: "", body: "", draft: false, pin: false });
     renderList();
     preview.innerHTML = "";
     el("f-title").focus();
@@ -603,6 +620,7 @@ body {
       lang: el("f-lang").value,
       i18nKey: el("f-i18n-key").value.trim(),
       draft: el("f-draft").checked,
+      pin: el("f-pin").checked,
       body: editor.value
     };
   }
@@ -689,6 +707,12 @@ body {
         el("site-slogan-en").value = data.sloganEn || "";
       })
       .catch(function () {});
+    el("social-hint").className = "account-hint";
+    el("social-hint").textContent = "";
+    fetch("/admin/api/social")
+      .then(function (r) { return r.json(); })
+      .then(function (data) { renderSocial((data && data.links) || []); })
+      .catch(function () { renderSocial([]); });
   }
 
   function closeAccount() { accountModal.hidden = true; }
@@ -746,6 +770,85 @@ body {
         if (!res.ok) { hint.className = "account-hint err"; hint.textContent = (res.data && res.data.error) || "保存失败"; return; }
         hint.className = "account-hint ok";
         hint.textContent = "站点信息已更新";
+      })
+      .catch(function () { hint.className = "account-hint err"; hint.textContent = "网络错误，保存失败"; });
+  });
+
+  var socialPlatforms = [
+    { value: "github", label: "GitHub" },
+    { value: "x", label: "X (Twitter)" },
+    { value: "youtube", label: "YouTube" },
+    { value: "bilibili", label: "Bilibili" },
+    { value: "bluesky", label: "Bluesky" },
+    { value: "discord", label: "Discord" },
+    { value: "email", label: "Email" },
+    { value: "gitlab", label: "GitLab" },
+    { value: "instagram", label: "Instagram" },
+    { value: "mastodon", label: "Mastodon" },
+    { value: "qq", label: "QQ" },
+    { value: "reddit", label: "Reddit" },
+    { value: "telegram", label: "Telegram" },
+    { value: "threads", label: "Threads" },
+    { value: "twitch", label: "Twitch" }
+  ];
+
+  function socialOptionsHtml(selected) {
+    var opts = '<option value="">选择平台</option>';
+    socialPlatforms.forEach(function (p) {
+      opts += '<option value="' + p.value + '"' + (selected === p.value ? " selected" : "") + ">" + p.label + "</option>";
+    });
+    return opts;
+  }
+
+  function renderSocial(links) {
+    var list = el("social-list");
+    list.innerHTML = "";
+    if (!links || links.length === 0) {
+      addSocialRow();
+      return;
+    }
+    links.forEach(function (l) { addSocialRow(l.type, l.url); });
+  }
+
+  function addSocialRow(type, url) {
+    var list = el("social-list");
+    var row = document.createElement("div");
+    row.className = "social-row";
+    row.innerHTML =
+      '<select class="admin-field">' + socialOptionsHtml(type || "") + "</select>" +
+      '<input class="admin-field" type="text" placeholder="链接地址，如 https://github.com/your-name">' +
+      '<button type="button" class="social-del" title="删除">×</button>';
+    row.querySelector("input").value = url || "";
+    row.querySelector(".social-del").addEventListener("click", function () {
+      row.remove();
+      if (el("social-list").children.length === 0) addSocialRow();
+    });
+    list.appendChild(row);
+  }
+
+  el("btn-add-social").addEventListener("click", function () { addSocialRow(); });
+
+  el("btn-save-social").addEventListener("click", function () {
+    var hint = el("social-hint");
+    var rows = el("social-list").querySelectorAll(".social-row");
+    var links = [];
+    rows.forEach(function (row) {
+      var t = row.querySelector("select").value.trim();
+      var u = row.querySelector("input").value.trim();
+      if (t && u) links.push({ type: t, url: u });
+    });
+    hint.className = "account-hint";
+    hint.textContent = "保存中…";
+    fetch("/admin/api/social", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ links: links })
+    })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+      .then(function (res) {
+        if (!res.ok) { hint.className = "account-hint err"; hint.textContent = (res.data && res.data.error) || "保存失败"; return; }
+        hint.className = "account-hint ok";
+        hint.textContent = "社交链接已更新";
       })
       .catch(function () { hint.className = "account-hint err"; hint.textContent = "网络错误，保存失败"; });
   });
