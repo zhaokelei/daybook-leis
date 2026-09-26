@@ -388,13 +388,44 @@ body {
     </div>
     <div class="admin-modal-body">
       <section class="account-block">
-        <div class="account-block-title">站点信息</div>
-        <label class="account-field"><span>标题（中文）</span><input class="admin-field" id="site-name-zh" type="text" placeholder="博主昵称"></label>
-        <label class="account-field"><span>标题（English）</span><input class="admin-field" id="site-name-en" type="text" placeholder="Owner name"></label>
-        <label class="account-field"><span>副标题（中文）</span><input class="admin-field" id="site-slogan-zh" type="text" placeholder="一句话简介"></label>
-        <label class="account-field"><span>副标题（English）</span><input class="admin-field" id="site-slogan-en" type="text" placeholder="One-line intro"></label>
+        <div class="account-block-title">博主信息</div>
+        <label class="account-field"><span>博主名称（中文）</span><input class="admin-field" id="site-name-zh" type="text" placeholder="博主昵称"></label>
+        <label class="account-field"><span>博主名称（English）</span><input class="admin-field" id="site-name-en" type="text" placeholder="Owner name"></label>
+        <label class="account-field"><span>博主副标题（中文）</span><input class="admin-field" id="site-slogan-zh" type="text" placeholder="一句话简介"></label>
+        <label class="account-field"><span>博主副标题（English）</span><input class="admin-field" id="site-slogan-en" type="text" placeholder="One-line intro"></label>
+      </section>
+      <section class="account-block">
+        <div class="account-block-title">站点资料</div>
+        <label class="account-field"><span>站点名称（中文）</span><input class="admin-field" id="site-title-zh" type="text" placeholder="用于 SEO 与 RSS，如：小磊的 Daybook"></label>
+        <label class="account-field"><span>站点名称（English）</span><input class="admin-field" id="site-title-en" type="text" placeholder="Site name for SEO & RSS"></label>
+        <label class="account-field"><span>站点网址</span><input class="admin-field" id="site-url" type="text" placeholder="https://example.com（留空则用相对路径）"></label>
+        <label class="account-field"><span>建站日期</span><input class="admin-field" id="site-started" type="text" placeholder="YYYY-MM-DD"></label>
+        <label class="account-field"><span>版权信息</span><input class="admin-field" id="site-copyright" type="text" placeholder="© 2026 你的名字"></label>
+        <label class="account-field"><span>站点图标</span><input class="admin-field" id="site-favicon" type="text" placeholder="favicon 路径，留空使用默认"></label>
+        <label class="account-field"><span>站点标识</span><input class="admin-field" id="site-logo-text" type="text" placeholder="左上角 Logo 文字，留空用英文名"></label>
+        <label class="account-field"><span>关于页</span><input class="admin-field" id="site-about-url" type="text" placeholder="/about"></label>
+      </section>
+      <section class="account-block">
+        <div class="account-block-title">首页 SEO</div>
+        <label class="account-field"><span>标题（中文）</span><input class="admin-field" id="seo-title-zh" type="text" placeholder="浏览器标签页标题"></label>
+        <label class="account-field"><span>标题（English）</span><input class="admin-field" id="seo-title-en" type="text" placeholder="Browser tab title"></label>
+        <label class="account-field"><span>描述（中文）</span><input class="admin-field" id="seo-desc-zh" type="text" placeholder="首页描述"></label>
+        <label class="account-field"><span>描述（English）</span><input class="admin-field" id="seo-desc-en" type="text" placeholder="Home description"></label>
+      </section>
+      <section class="account-block">
+        <div class="account-block-title">评论与统计</div>
+        <label class="admin-check"><input type="checkbox" id="stats-enabled"> 启用访问统计</label>
+        <label class="account-field"><span>分享文案</span><input class="admin-field" id="share-text" type="text" placeholder="「{Title}」"></label>
+        <label class="admin-check"><input type="checkbox" id="comment-enabled"> 启用评论</label>
+        <label class="account-field"><span>评论服务</span><input class="admin-field" id="comment-provider" type="text" placeholder="waline"></label>
+        <label class="account-field"><span>服务地址</span><input class="admin-field" id="waline-server" type="text" placeholder="https://waline.example.com"></label>
+        <label class="account-field"><span>评论语言</span><input class="admin-field" id="waline-lang" type="text" placeholder="zh-CN"></label>
+        <label class="account-field"><span>每页条数</span><input class="admin-field" id="waline-page-size" type="number" min="1" placeholder="10"></label>
+        <label class="account-field"><span>评论排序</span><input class="admin-field" id="waline-sorting" type="text" placeholder="latest / oldest"></label>
+        <label class="admin-check"><input type="checkbox" id="waline-search"> 启用评论搜索</label>
+        <label class="admin-check"><input type="checkbox" id="waline-upload"> 启用图片上传</label>
         <div class="account-hint" id="site-hint"></div>
-        <div class="account-actions"><button type="button" class="admin-btn primary" id="btn-save-site">保存站点信息</button></div>
+        <div class="account-actions"><button type="button" class="admin-btn primary" id="btn-save-site">保存全部设置</button></div>
       </section>
       <section class="account-block">
         <div class="account-block-title">社交链接</div>
@@ -705,6 +736,28 @@ body {
         el("site-name-en").value = data.nameEn || "";
         el("site-slogan-zh").value = data.sloganZh || "";
         el("site-slogan-en").value = data.sloganEn || "";
+        el("site-url").value = data.siteUrl || "";
+        el("site-title-zh").value = data.siteTitleZh || "";
+        el("site-title-en").value = data.siteTitleEn || "";
+        el("site-started").value = data.startedAt || "";
+        el("site-copyright").value = data.copyright || "";
+        el("site-favicon").value = data.favicon || "";
+        el("site-logo-text").value = data.logoText || "";
+        el("site-about-url").value = data.aboutUrl || "";
+        el("seo-title-zh").value = data.homeTitleZh || "";
+        el("seo-title-en").value = data.homeTitleEn || "";
+        el("seo-desc-zh").value = data.homeDescZh || "";
+        el("seo-desc-en").value = data.homeDescEn || "";
+        el("share-text").value = data.shareText || "";
+        el("stats-enabled").checked = !!data.statsEnabled;
+        el("comment-enabled").checked = !!data.commentEnabled;
+        el("comment-provider").value = data.commentProvider || "";
+        el("waline-server").value = data.walineServerUrl || "";
+        el("waline-lang").value = data.walineLang || "";
+        el("waline-page-size").value = data.walinePageSize || "";
+        el("waline-sorting").value = data.walineSorting || "";
+        el("waline-search").checked = !!data.walineSearch;
+        el("waline-upload").checked = !!data.walineImageUploader;
       })
       .catch(function () {});
     el("social-hint").className = "account-hint";
@@ -762,14 +815,36 @@ body {
         name: el("site-name-zh").value.trim(),
         nameEn: el("site-name-en").value.trim(),
         sloganZh: el("site-slogan-zh").value.trim(),
-        sloganEn: el("site-slogan-en").value.trim()
+        sloganEn: el("site-slogan-en").value.trim(),
+        siteUrl: el("site-url").value.trim(),
+        siteTitleZh: el("site-title-zh").value.trim(),
+        siteTitleEn: el("site-title-en").value.trim(),
+        startedAt: el("site-started").value.trim(),
+        copyright: el("site-copyright").value.trim(),
+        favicon: el("site-favicon").value.trim(),
+        logoText: el("site-logo-text").value.trim(),
+        aboutUrl: el("site-about-url").value.trim(),
+        homeTitleZh: el("seo-title-zh").value.trim(),
+        homeTitleEn: el("seo-title-en").value.trim(),
+        homeDescZh: el("seo-desc-zh").value.trim(),
+        homeDescEn: el("seo-desc-en").value.trim(),
+        shareText: el("share-text").value.trim(),
+        statsEnabled: el("stats-enabled").checked,
+        commentEnabled: el("comment-enabled").checked,
+        commentProvider: el("comment-provider").value.trim(),
+        walineServerUrl: el("waline-server").value.trim(),
+        walineLang: el("waline-lang").value.trim(),
+        walinePageSize: parseInt(el("waline-page-size").value, 10) || 0,
+        walineSorting: el("waline-sorting").value.trim(),
+        walineSearch: el("waline-search").checked,
+        walineImageUploader: el("waline-upload").checked
       })
     })
       .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
       .then(function (res) {
         if (!res.ok) { hint.className = "account-hint err"; hint.textContent = (res.data && res.data.error) || "保存失败"; return; }
         hint.className = "account-hint ok";
-        hint.textContent = "站点信息已更新";
+        hint.textContent = "设置已更新";
       })
       .catch(function () { hint.className = "account-hint err"; hint.textContent = "网络错误，保存失败"; });
   });

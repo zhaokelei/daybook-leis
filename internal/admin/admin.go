@@ -315,8 +315,32 @@ func readConfigValue(configPath string, path ...string) string {
 	return strings.Trim(value, "\"'")
 }
 
-// updateConfigValue 更新嵌套配置项的值；若叶子键不存在，则在其父级块末尾插入。
+// readConfigBool 读取布尔型配置项。
+func readConfigBool(configPath string, path ...string) bool {
+	return strings.EqualFold(readConfigValue(configPath, path...), "true")
+}
+
+// readConfigInt 读取整型配置项，解析失败时返回 0。
+func readConfigInt(configPath string, path ...string) int {
+	n, err := strconv.Atoi(readConfigValue(configPath, path...))
+	if err != nil {
+		return 0
+	}
+	return n
+}
+
+// updateConfigValue 更新嵌套配置项的值（自动加引号）；若叶子键不存在，则在其父级块末尾插入。
 func updateConfigValue(configPath, value string, path ...string) error {
+	return writeConfigLeaf(configPath, strconv.Quote(value), path...)
+}
+
+// updateConfigRawValue 以原始文本写入配置项（不加引号），用于布尔值与数字。
+func updateConfigRawValue(configPath, raw string, path ...string) error {
+	return writeConfigLeaf(configPath, raw, path...)
+}
+
+// writeConfigLeaf 将 formatted 作为配置项的值写入；若叶子键不存在，则在其父级块末尾插入。
+func writeConfigLeaf(configPath, formatted string, path ...string) error {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return err
@@ -326,7 +350,7 @@ func updateConfigValue(configPath, value string, path ...string) error {
 
 	idx, indent := findConfigKey(lines, path)
 	if idx >= 0 {
-		lines[idx] = indent + leaf + ": " + strconv.Quote(value)
+		lines[idx] = indent + leaf + ": " + formatted
 		return os.WriteFile(configPath, []byte(strings.Join(lines, "\n")), 0644)
 	}
 
@@ -352,7 +376,7 @@ func updateConfigValue(configPath, value string, path ...string) error {
 		blockIndent = line[:lineIndent]
 		insertAt = i + 1
 	}
-	newLine := blockIndent + leaf + ": " + strconv.Quote(value)
+	newLine := blockIndent + leaf + ": " + formatted
 	updated := make([]string, 0, len(lines)+1)
 	updated = append(updated, lines[:insertAt]...)
 	updated = append(updated, newLine)
@@ -363,12 +387,35 @@ func updateConfigValue(configPath, value string, path ...string) error {
 func (s *Server) handleSite(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
+		cfg := s.options.ConfigPath
 		writeJSON(w, http.StatusOK, map[string]any{
-			"ok":       true,
-			"name":     readConfigValue(s.options.ConfigPath, "profile", "author", "name"),
-			"nameEn":   readConfigValue(s.options.ConfigPath, "profile", "author", "nameEn"),
-			"sloganZh": readConfigValue(s.options.ConfigPath, "profile", "slogan", "zh"),
-			"sloganEn": readConfigValue(s.options.ConfigPath, "profile", "slogan", "en_US"),
+			"ok":                  true,
+			"name":                readConfigValue(cfg, "profile", "author", "name"),
+			"nameEn":              readConfigValue(cfg, "profile", "author", "nameEn"),
+			"sloganZh":            readConfigValue(cfg, "profile", "slogan", "zh"),
+			"sloganEn":            readConfigValue(cfg, "profile", "slogan", "en_US"),
+			"siteUrl":             readConfigValue(cfg, "site", "url"),
+			"siteTitleZh":         readConfigValue(cfg, "site", "name", "zh"),
+			"siteTitleEn":         readConfigValue(cfg, "site", "name", "en"),
+			"startedAt":           readConfigValue(cfg, "site", "startedAt"),
+			"copyright":           readConfigValue(cfg, "site", "copyright"),
+			"favicon":             readConfigValue(cfg, "site", "favicon"),
+			"logoText":            readConfigValue(cfg, "profile", "author", "logoText"),
+			"aboutUrl":            readConfigValue(cfg, "profile", "author", "aboutUrl"),
+			"homeTitleZh":         readConfigValue(cfg, "seo", "homeTitle", "zh"),
+			"homeTitleEn":         readConfigValue(cfg, "seo", "homeTitle", "en"),
+			"homeDescZh":          readConfigValue(cfg, "seo", "homeDescription", "zh"),
+			"homeDescEn":          readConfigValue(cfg, "seo", "homeDescription", "en"),
+			"shareText":           readConfigValue(cfg, "share", "text"),
+			"statsEnabled":        readConfigBool(cfg, "stats", "enabled"),
+			"commentEnabled":      readConfigBool(cfg, "comment", "enabled"),
+			"commentProvider":     readConfigValue(cfg, "comment", "provider"),
+			"walineServerUrl":     readConfigValue(cfg, "comment", "waline", "serverURL"),
+			"walineLang":          readConfigValue(cfg, "comment", "waline", "lang"),
+			"walinePageSize":      readConfigInt(cfg, "comment", "waline", "pageSize"),
+			"walineSorting":       readConfigValue(cfg, "comment", "waline", "commentSorting"),
+			"walineSearch":        readConfigBool(cfg, "comment", "waline", "search"),
+			"walineImageUploader": readConfigBool(cfg, "comment", "waline", "imageUploader"),
 		})
 	case http.MethodPost:
 		s.saveSite(w, r)
@@ -379,10 +426,32 @@ func (s *Server) handleSite(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) saveSite(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Name     string `json:"name"`
-		NameEn   string `json:"nameEn"`
-		SloganZh string `json:"sloganZh"`
-		SloganEn string `json:"sloganEn"`
+		Name                string `json:"name"`
+		NameEn              string `json:"nameEn"`
+		SloganZh            string `json:"sloganZh"`
+		SloganEn            string `json:"sloganEn"`
+		SiteURL             string `json:"siteUrl"`
+		SiteTitleZh         string `json:"siteTitleZh"`
+		SiteTitleEn         string `json:"siteTitleEn"`
+		StartedAt           string `json:"startedAt"`
+		Copyright           string `json:"copyright"`
+		Favicon             string `json:"favicon"`
+		LogoText            string `json:"logoText"`
+		AboutURL            string `json:"aboutUrl"`
+		HomeTitleZh         string `json:"homeTitleZh"`
+		HomeTitleEn         string `json:"homeTitleEn"`
+		HomeDescZh          string `json:"homeDescZh"`
+		HomeDescEn          string `json:"homeDescEn"`
+		ShareText           string `json:"shareText"`
+		StatsEnabled        bool   `json:"statsEnabled"`
+		CommentEnabled      bool   `json:"commentEnabled"`
+		CommentProvider     string `json:"commentProvider"`
+		WalineServerURL     string `json:"walineServerUrl"`
+		WalineLang          string `json:"walineLang"`
+		WalinePageSize      int    `json:"walinePageSize"`
+		WalineSorting       string `json:"walineSorting"`
+		WalineSearch        bool   `json:"walineSearch"`
+		WalineImageUploader bool   `json:"walineImageUploader"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "请求格式错误: "+err.Error())
@@ -393,20 +462,60 @@ func (s *Server) saveSite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	siteURL := strings.TrimSpace(req.SiteURL)
+	if siteURL != "" && !strings.HasPrefix(siteURL, "http://") && !strings.HasPrefix(siteURL, "https://") {
+		writeError(w, http.StatusBadRequest, "站点网址必须以 http:// 或 https:// 开头")
+		return
+	}
+
+	pageSize := req.WalinePageSize
+	if pageSize <= 0 {
+		pageSize = 10
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	updates := []struct {
 		value string
+		raw   bool
 		path  []string
 	}{
-		{strings.TrimSpace(req.Name), []string{"profile", "author", "name"}},
-		{strings.TrimSpace(req.NameEn), []string{"profile", "author", "nameEn"}},
-		{strings.TrimSpace(req.SloganZh), []string{"profile", "slogan", "zh"}},
-		{strings.TrimSpace(req.SloganEn), []string{"profile", "slogan", "en_US"}},
+		{strings.TrimSpace(req.Name), false, []string{"profile", "author", "name"}},
+		{strings.TrimSpace(req.NameEn), false, []string{"profile", "author", "nameEn"}},
+		{strings.TrimSpace(req.SloganZh), false, []string{"profile", "slogan", "zh"}},
+		{strings.TrimSpace(req.SloganEn), false, []string{"profile", "slogan", "en_US"}},
+		{siteURL, false, []string{"site", "url"}},
+		{strings.TrimSpace(req.SiteTitleZh), false, []string{"site", "name", "zh"}},
+		{strings.TrimSpace(req.SiteTitleEn), false, []string{"site", "name", "en"}},
+		{strings.TrimSpace(req.StartedAt), false, []string{"site", "startedAt"}},
+		{strings.TrimSpace(req.Copyright), false, []string{"site", "copyright"}},
+		{strings.TrimSpace(req.Favicon), false, []string{"site", "favicon"}},
+		{strings.TrimSpace(req.LogoText), false, []string{"profile", "author", "logoText"}},
+		{strings.TrimSpace(req.AboutURL), false, []string{"profile", "author", "aboutUrl"}},
+		{strings.TrimSpace(req.HomeTitleZh), false, []string{"seo", "homeTitle", "zh"}},
+		{strings.TrimSpace(req.HomeTitleEn), false, []string{"seo", "homeTitle", "en"}},
+		{strings.TrimSpace(req.HomeDescZh), false, []string{"seo", "homeDescription", "zh"}},
+		{strings.TrimSpace(req.HomeDescEn), false, []string{"seo", "homeDescription", "en"}},
+		{strings.TrimSpace(req.ShareText), false, []string{"share", "text"}},
+		{strconv.FormatBool(req.StatsEnabled), true, []string{"stats", "enabled"}},
+		{strconv.FormatBool(req.CommentEnabled), true, []string{"comment", "enabled"}},
+		{strings.TrimSpace(req.CommentProvider), false, []string{"comment", "provider"}},
+		{strings.TrimSpace(req.WalineServerURL), false, []string{"comment", "waline", "serverURL"}},
+		{strings.TrimSpace(req.WalineLang), false, []string{"comment", "waline", "lang"}},
+		{strconv.Itoa(pageSize), true, []string{"comment", "waline", "pageSize"}},
+		{strings.TrimSpace(req.WalineSorting), false, []string{"comment", "waline", "commentSorting"}},
+		{strconv.FormatBool(req.WalineSearch), true, []string{"comment", "waline", "search"}},
+		{strconv.FormatBool(req.WalineImageUploader), true, []string{"comment", "waline", "imageUploader"}},
 	}
 	for _, u := range updates {
-		if err := updateConfigValue(s.options.ConfigPath, u.value, u.path...); err != nil {
+		var err error
+		if u.raw {
+			err = updateConfigRawValue(s.options.ConfigPath, u.value, u.path...)
+		} else {
+			err = updateConfigValue(s.options.ConfigPath, u.value, u.path...)
+		}
+		if err != nil {
 			writeError(w, http.StatusInternalServerError, "更新 daybook.yaml 失败: "+err.Error())
 			return
 		}
