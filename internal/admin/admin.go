@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"archive/zip"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -10,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -60,6 +62,8 @@ func New(options Options) http.Handler {
 	mux.HandleFunc("/admin/api/account", s.requireAuth(s.handleAccount))
 	mux.HandleFunc("/admin/api/site", s.requireAuth(s.handleSite))
 	mux.HandleFunc("/admin/api/social", s.requireAuth(s.handleSocial))
+	mux.HandleFunc("/admin/api/export", s.requireAuth(s.handleExport))
+	mux.HandleFunc("/admin/api/import", s.requireAuth(s.handleImport))
 	return mux
 }
 
@@ -1137,6 +1141,283 @@ func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) {
 		"ok":   true,
 		"slug": slug,
 	})
+}
+
+func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "只支持 GET")
+		return
+	}
+	if s.options.ConfigPath == "" {
+		writeError(w, http.StatusInternalServerError, "未配置站点路径，无法导出")
+		return
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	filename := "daybook-backup-" + time.Now().Format("20060102-150405") + ".zip"
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", "attachment; filename=\""+filename+"\"")
+	w.Header().Set("Cache-Control", "no-store")
+
+	zw := zip.NewWriter(w)
+	defer zw.Close()
+
+	if err := addFileToZip(zw, s.options.ConfigPath, "daybook.yaml"); err != nil {
+		return
+	}
+	if s.options.ContentDir != "" {
+		_ = addDirToZip(zw, s.options.ContentDir, "vault")
+	}
+}
+
+func addFileToZip(zw *zip.Writer, srcPath, name string) error {
+	info, err := os.Stat(srcPath)
+	if err != nil {
+		return err
+	}
+	header, err := zip.FileInfoHeader(info)
+	if err != nil {
+		return err
+	}
+	header.Name = filepath.ToSlash(name)
+	header.Method = zip.Deflate
+	writer, err := zw.CreateHeader(header)
+	if err != nil {
+		return err
+	}
+	src, err := os.Open(srcPath)
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+	_, err = io.Copy(writer, src)
+	return err
+}
+
+func addDirToZip(zw *zip.Writer, rootDir, baseName string) error {
+	rootAbs, err := filepath.Abs(rootDir)
+	if err != nil {
+		return err
+	}
+	return filepath.WalkDir(rootAbs, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		rel, relErr := filepath.Rel(rootAbs, path)
+		if relErr != nil {
+			return relErr
+		}
+		if rel == "." {
+			return nil
+		}
+		if strings.HasPrefix(entry.Name(), ".") {
+			if entry.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		info, infoErr := entry.Info()
+		if infoErr != nil {
+			return infoErr
+		}
+		header, hErr := zip.FileInfoHeader(info)
+		if hErr != nil {
+			return hErr
+		}
+		header.Name = filepath.ToSlash(filepath.Join(baseName, rel))
+		header.Method = zip.Deflate
+		writer, wErr := zw.CreateHeader(header)
+		if wErr != nil {
+			return wErr
+		}
+		src, openErr := os.Open(path)
+		if openErr != nil {
+			return openErr
+		}
+		defer src.Close()
+		_, copyErr := io.Copy(writer, src)
+		return copyErr
+	})
+}
+
+const (
+	maxImportSize      = 256 << 20
+	maxImportTotalSize = 512 << 20
+)
+
+func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "只支持 POST")
+		return
+	}
+	if s.options.ContentDir == "" {
+		writeError(w, http.StatusInternalServerError, "未配置站点路径，无法导入")
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxImportSize)
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "请选择要导入的 zip 文件")
+		return
+	}
+	defer file.Close()
+
+	size, err := file.Seek(0, io.SeekEnd)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "读取上传文件失败: "+err.Error())
+		return
+	}
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		writeError(w, http.StatusBadRequest, "读取上传文件失败: "+err.Error())
+		return
+	}
+
+	zr, err := zip.NewReader(file, size)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "不是有效的 zip 文件: "+err.Error())
+		return
+	}
+
+	type plannedFile struct {
+		dest  string
+		entry *zip.File
+	}
+	var plans []plannedFile
+	var totalSize uint64
+
+	for _, entry := range zr.File {
+		rawName := entry.Name
+		if strings.HasSuffix(rawName, "/") || entry.FileInfo().IsDir() {
+			continue
+		}
+		name, ok := safeZipName(rawName)
+		if !ok {
+			writeError(w, http.StatusBadRequest, "压缩包包含非法路径: "+rawName)
+			return
+		}
+		if strings.HasPrefix(path.Base(name), ".") {
+			continue
+		}
+
+		var dest string
+		switch {
+		case name == "daybook.yaml":
+			if s.options.ConfigPath == "" {
+				writeError(w, http.StatusBadRequest, "站点未配置 daybook.yaml 路径，无法恢复配置")
+				return
+			}
+			dest = s.options.ConfigPath
+		case name == "vault" || strings.HasPrefix(name, "vault/"):
+			rel := strings.TrimPrefix(strings.TrimPrefix(name, "vault"), "/")
+			if rel == "" {
+				continue
+			}
+			dest = filepath.Join(s.options.ContentDir, filepath.FromSlash(rel))
+			if !ensureWithinDir(s.options.ContentDir, dest) {
+				writeError(w, http.StatusBadRequest, "压缩包包含越界路径: "+rawName)
+				return
+			}
+		default:
+			writeError(w, http.StatusBadRequest, "压缩包包含未知内容: "+rawName)
+			return
+		}
+
+		if strings.HasPrefix(filepath.Base(dest), ".") {
+			continue
+		}
+		totalSize += entry.UncompressedSize64
+		if totalSize > maxImportTotalSize {
+			writeError(w, http.StatusBadRequest, "压缩包内容过大，已中止导入")
+			return
+		}
+		plans = append(plans, plannedFile{dest: dest, entry: entry})
+	}
+
+	if len(plans) == 0 {
+		writeError(w, http.StatusBadRequest, "压缩包中没有可导入的内容")
+		return
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for _, plan := range plans {
+		if err := extractZipEntry(plan.entry, plan.dest); err != nil {
+			writeError(w, http.StatusInternalServerError, "写入文件失败: "+err.Error())
+			return
+		}
+	}
+
+	if s.options.Build != nil {
+		if buildErr := s.options.Build(); buildErr != nil {
+			writeError(w, http.StatusInternalServerError, "数据已导入，但重建站点失败: "+buildErr.Error())
+			return
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "files": len(plans)})
+}
+
+func safeZipName(name string) (string, bool) {
+	normalized := strings.ReplaceAll(name, "\\", "/")
+	if strings.HasPrefix(normalized, "/") {
+		return "", false
+	}
+	for _, part := range strings.Split(normalized, "/") {
+		if part == ".." {
+			return "", false
+		}
+	}
+	cleaned := path.Clean(normalized)
+	if cleaned == "." || cleaned == "" {
+		return "", false
+	}
+	return cleaned, true
+}
+
+func ensureWithinDir(root, target string) bool {
+	rootAbs, err := filepath.Abs(root)
+	if err != nil {
+		return false
+	}
+	targetAbs, err := filepath.Abs(target)
+	if err != nil {
+		return false
+	}
+	rel, err := filepath.Rel(rootAbs, targetAbs)
+	if err != nil {
+		return false
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return false
+	}
+	return true
+}
+
+func extractZipEntry(entry *zip.File, dest string) error {
+	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+		return err
+	}
+	src, err := entry.Open()
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+	out, err := os.OpenFile(dest, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, src); err != nil {
+		out.Close()
+		return err
+	}
+	return out.Close()
 }
 
 func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {

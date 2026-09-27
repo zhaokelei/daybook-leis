@@ -332,6 +332,9 @@ body {
     <button type="button" class="admin-btn admin-icon-btn" id="btn-theme" title="切换主题">主题</button>
     <button type="button" class="admin-btn" id="btn-account">账户</button>
     <button type="button" class="admin-btn" id="btn-logout">退出</button>
+    <button type="button" class="admin-btn" id="btn-export" title="导出网站配置与全部文章">导出数据</button>
+    <button type="button" class="admin-btn" id="btn-import" title="从备份 zip 恢复网站配置与文章">导入数据</button>
+    <input type="file" id="import-file" accept=".zip,application/zip" style="display:none">
     <a class="admin-btn" href="/" target="_blank" rel="noopener">查看站点</a>
   </div>
 </header>
@@ -999,6 +1002,45 @@ body {
         el("acc-confirm").value = "";
       })
       .catch(function () { hint.className = "account-hint err"; hint.textContent = "网络错误，保存失败"; });
+  });
+
+  el("btn-export").addEventListener("click", function () {
+    setStatus("正在打包导出…", "");
+    var a = document.createElement("a");
+    a.href = "/admin/api/export";
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { setStatus("导出已开始，请查看浏览器下载", "ok"); }, 800);
+  });
+
+  el("btn-import").addEventListener("click", function () {
+    el("import-file").click();
+  });
+
+  el("import-file").addEventListener("change", function () {
+    var input = el("import-file");
+    var file = input.files && input.files[0];
+    if (!file) return;
+    if (!window.confirm("确定要用「" + file.name + "」覆盖当前网站配置与全部文章吗？此操作不可恢复。")) {
+      input.value = "";
+      return;
+    }
+    var form = new FormData();
+    form.append("file", file);
+    setStatus("正在导入数据…", "");
+    fetch("/admin/api/import", { method: "POST", body: form })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+      .then(function (res) {
+        input.value = "";
+        if (!res.ok) { setStatus((res.data && res.data.error) || "导入失败", "err"); return; }
+        setStatus("数据已导入，正在刷新…", "ok");
+        return loadList().then(function (notes) {
+          if (notes && notes.length) { loadNote(notes[0].slug); } else { newNote(); }
+        });
+      })
+      .catch(function () { input.value = ""; setStatus("网络错误，导入失败", "err"); });
   });
 
   el("btn-logout").addEventListener("click", function () {
