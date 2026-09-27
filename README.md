@@ -169,6 +169,88 @@ Stop-ScheduledTask Daybook; Start-ScheduledTask Daybook # 重启
 | Linux | amd64, arm64 | 一键脚本 / 原生支持 |
 | Windows | amd64, arm64 | 一键脚本 / 原生支持 |
 
+## 更新
+
+更新只需**重新运行一次安装脚本**，无需卸载。脚本会自动完成：
+
+1. 用新版本**覆盖可执行文件**（`cp` / `Copy-Item -Force`）；
+2. 在数据目录重新执行一次 `daybook build`；
+3. **重新注册并重启系统服务**（systemd / 计划任务）。
+
+> 你的数据是安全的：脚本对 `daybook.yaml` 与 `vault/` 采用「**存在即跳过**」处理（检测到已有 `daybook.yaml`，跳过初始化配置），因此**更新不会覆盖站点配置与文章/附件**。
+
+### 在线更新（推荐，直接拉取最新 Release）
+
+**Linux**
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/zhaokelei/daybook-leis/main/install.sh | sudo bash
+```
+
+**Windows（管理员 PowerShell）**
+
+```powershell
+$u = 'https://raw.githubusercontent.com/zhaokelei/daybook-leis/main/install.ps1'
+$f = "$env:TEMP\install-daybook.ps1"
+irm $u -OutFile $f
+powershell -ExecutionPolicy Bypass -File $f
+```
+
+### 克隆后本地更新
+
+```bash
+cd daybook-leis
+git pull
+
+# Linux
+sudo ./install.sh --download
+```
+
+```powershell
+cd daybook-leis
+git pull
+
+# Windows（管理员 PowerShell）
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -Download
+```
+
+> 不加 `--download`（Windows 为 `-Download`）时，脚本会**优先使用仓库 `dist/` 目录下的本地产物**；加上后会强制从 [GitHub Releases](https://github.com/zhaokelei/daybook-leis/releases) 下载对应平台的最新版本。
+
+### 手动更新（仅替换二进制）
+
+如果只想换程序、不动其它配置：
+
+```sh
+# Linux
+sudo cp dist/daybook-linux-amd64 /usr/local/bin/daybook
+sudo chmod 0755 /usr/local/bin/daybook
+systemctl restart daybook
+```
+
+```powershell
+# Windows（管理员 PowerShell）
+Copy-Item -Path .\dist\daybook-windows-amd64.exe -Destination "$env:ProgramData\Daybook\bin\daybook.exe" -Force
+Stop-ScheduledTask Daybook; Start-ScheduledTask Daybook
+```
+
+### 更新后确认
+
+```sh
+# Linux
+daybook version                 # 确认版本
+systemctl status daybook        # 确认服务运行
+journalctl -u daybook -f        # 查看日志
+```
+
+```powershell
+# Windows
+daybook version
+Get-ScheduledTask -TaskName Daybook
+```
+
+> **更新前建议先备份数据**：写作台提供「导出数据」功能，可打包下载 `daybook.yaml` 与 `vault/`；也可以直接复制数据目录（Linux `/opt/daybook`，Windows `%ProgramData%\Daybook`）。
+> 若更新后站点内容未刷新，可在数据目录中手动再执行一次 `daybook build`。
+
 ## CLI Commands
 
 Run these commands inside your Vault directory:
