@@ -54,7 +54,7 @@ await copyDirClean(
 // 这里只使用模板中实际用到的字形，通过 Google Fonts CSS2 的 icon_names 参数裁剪为约 29KB 的子集。
 // 需要新增图标时，用下面的地址重新生成（把图标名追加到 icon_names，逗号分隔），
 // 将返回 CSS 里 src 的 woff2 下载后覆盖 scripts/assets/material-symbols-rounded.min.woff2：
-// https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&icon_names=account_tree,archive,arrow_back,arrow_downward,arrow_forward,arrow_upward,article,attach_file,center_focus_strong,chrome_reader_mode,close,content_copy,exit_to_app,format_list_bulleted,home,info,menu,menu_open,music_note_2,palette,scatter_plot,search,sell,share,translate
+// https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&icon_names=account_tree,archive,arrow_back,arrow_downward,arrow_forward,arrow_upward,article,attach_file,center_focus_strong,chrome_reader_mode,close,content_copy,exit_to_app,format_list_bulleted,home,info,menu,menu_open,music_note_2,palette,scatter_plot,search,sell,settings,share,translate
 await copyFileClean(
   path.join(root, "scripts", "assets", "material-symbols-rounded.min.woff2"),
   path.join(root, "internal", "embedded", "static", "vendor", "fonts", "material-symbols", "material-symbols-rounded.min.woff2"),

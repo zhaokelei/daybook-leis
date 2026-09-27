@@ -984,6 +984,15 @@ body.is-mobile-drawer-open .mobile-menu-toggle .icon-close {
   padding: 0 12px;
 }
 
+button.drawer-switch-item {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  width: 100%;
+}
+
 .drawer-switch-label {
   align-items: center;
   display: flex;

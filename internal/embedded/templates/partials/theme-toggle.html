@@ -12,6 +12,9 @@
 <a class="notes-action-button header-theme-toggle lang-toggle" href="{{.AlternateURL}}" aria-label="{{T .Lang "post.bilingual"}}" data-notes-tool="lang">
   <span class="material-symbol" aria-hidden="true">translate</span>
 </a>
+<button class="notes-action-button header-theme-toggle settings-toggle" type="button" aria-label="{{T .Lang "action.settings"}}">
+  <span class="material-symbol" aria-hidden="true">settings</span>
+</button>
 {{end}}
 
 {{define "theme_toggle_action"}}
@@ -28,4 +31,7 @@
 <a class="notes-action-button lang-toggle" href="{{.AlternateURL}}" aria-label="{{T .Lang "post.bilingual"}}" data-tooltip="中/EN" data-notes-tool="lang">
   <span class="material-symbol" aria-hidden="true">translate</span>
 </a>
+<button class="notes-action-button settings-toggle" type="button" aria-label="{{T .Lang "action.settings"}}" data-tooltip="{{T .Lang "tooltip.settings"}}">
+  <span class="material-symbol" aria-hidden="true">settings</span>
+</button>
 {{end}}

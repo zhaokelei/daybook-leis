@@ -63,17 +63,21 @@ document.addEventListener("daybook:settings-change", (e) => {
 
 // assets/ts/settings-overlay.ts
 function initSettingsOverlay() {
-  const persistentLogo = document.querySelector(".persistent-logo");
-  if (!persistentLogo) return;
-  persistentLogo.addEventListener("click", (e) => {
-    e.preventDefault();
+  const openOverlay = () => {
     const overlay = document.getElementById("settings-overlay");
     if (!overlay) return;
+    const drawer = document.getElementById("mobile-drawer");
+    if (drawer && document.body.classList.contains("is-mobile-drawer-open")) {
+      document.body.classList.remove("is-mobile-drawer-open");
+      drawer.setAttribute("aria-hidden", "true");
+      const drawerToggle = document.getElementById("mobile-menu-toggle");
+      if (drawerToggle) drawerToggle.setAttribute("aria-expanded", "false");
+    }
     overlay.removeAttribute("inert");
     overlay.setAttribute("aria-hidden", "false");
     overlay.classList.add("is-open");
     document.body.style.overflow = "hidden";
-  });
+  };
   const closeOverlay = (overlay) => {
     overlay.setAttribute("inert", "");
     overlay.setAttribute("aria-hidden", "true");
@@ -82,6 +86,11 @@ function initSettingsOverlay() {
   };
   document.addEventListener("click", (e) => {
     const target = e.target;
+    if (target.closest(".settings-toggle")) {
+      e.preventDefault();
+      openOverlay();
+      return;
+    }
     const overlay = document.getElementById("settings-overlay");
     if (!overlay || !overlay.classList.contains("is-open")) return;
     if (target.closest("[data-settings-close]")) {
