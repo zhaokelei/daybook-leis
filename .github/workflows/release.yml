@@ -91,6 +91,6 @@ jobs:
             daybook_*.tar.gz
             daybook_*.zip
             checksums.txt
-            scripts/install.sh
-            scripts/install.ps1
+            install.sh
+            install.ps1
           generate_release_notes: true
