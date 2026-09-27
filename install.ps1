@@ -373,6 +373,15 @@ If you'd like to reach me, just leave a comment under any post.
 # ---------- 安装可执行文件 ----------
 $installedExe = Join-Path $InstallDir 'daybook.exe'
 Write-Log "安装可执行文件到 $installedExe"
+
+# 覆盖前先停止正在运行的计划任务与进程，否则 exe 被占用会导致复制失败
+if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
+    Write-Log "检测到已有计划任务，先停止以释放可执行文件：$TaskName"
+    Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+}
+Get-Process -Name 'daybook' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Start-Sleep -Milliseconds 500
+
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 Copy-Item -Path $SrcBin -Destination $installedExe -Force
 

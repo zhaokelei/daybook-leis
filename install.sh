@@ -377,9 +377,15 @@ MD
 fi
 
 # ---------- 安装可执行文件 ----------
+# 覆盖前先停掉正在运行的旧服务，否则 Linux 会报 “Text file busy”（无法覆盖正在执行中的文件）
+if [ "$NO_SERVICE" -eq 0 ] && command -v systemctl >/dev/null 2>&1 \
+   && systemctl is-active "$SERVICE_NAME" >/dev/null 2>&1; then
+  log "检测到服务正在运行，先停止以释放可执行文件：${SERVICE_NAME}"
+  systemctl stop "$SERVICE_NAME" >/dev/null 2>&1 || true
+fi
 log "安装可执行文件到 ${BIN_DIR}/${EXE_NAME}"
 mkdir -p "$BIN_DIR" || die "无法创建目录：$BIN_DIR"
-cp "$SRC_BIN" "${BIN_DIR}/${EXE_NAME}" || die "复制失败，请检查权限"
+cp "$SRC_BIN" "${BIN_DIR}/${EXE_NAME}" || die "复制失败：目标可能正被占用或权限不足（可先执行 systemctl stop ${SERVICE_NAME} 后重试）"
 chmod 0755 "${BIN_DIR}/${EXE_NAME}"
 "${BIN_DIR}/${EXE_NAME}" version >/dev/null || die "安装后无法运行，请检查文件是否完整"
 log "安装完成：$("${BIN_DIR}/${EXE_NAME}" version)"
